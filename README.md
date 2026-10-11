@@ -30,9 +30,9 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 - [X] Support [Ideogram 4.0](https://huggingface.co/ideogram-research/Ideogram-4.0)
     - use **Ideogram 4 Studio** (see below) instead of the plain prompt box
     - requires two accompanying modules (selected in the VAE / Text Encoder dropdowns):
-        - the Flux2-family VAE (`Ideogram4-flux2-vae.safetensors`, see [Download Models](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Download-Models))
+        - the Flux2-family VAE (the same `flux2-vae` file used by `FLUX.2` / `Klein` models)
         - an **abliterated** Qwen3-VL text encoder (auto-downloaded from
-          [noelthekke/ideogram4-text-encoder-abliterated](https://huggingface.co/noelthekke/ideogram4-text-encoder-abliterated)
+          [SizorCloud/ideogram4-text-encoder-abliterated-merged](https://huggingface.co/SizorCloud/ideogram4-text-encoder-abliterated-merged)
           if none is selected)
     - pick the **Ideogram4** preset in **Settings/Presets** (Euler / Simple / 20 steps / CFG 7)
 

@@ -317,7 +317,10 @@ _QWEN3VL_TOKENIZER = None
 _QWEN3VL_PATCHER = None
 _QWEN3VL_SOURCE = None  # weight file we built the current model from (for change detection)
 _SELECTED_TE_FILE = None  # set by engine init from loader routing (guess.te_source_files)
-_HF_TE_REPO = "noelthekke/ideogram4-text-encoder-abliterated"
+_HF_TE_REPO = "SizorCloud/ideogram4-text-encoder-abliterated-merged"
+# single-file merged fork of noelthekke/ideogram4-text-encoder-abliterated:
+# the sharded original cannot be selected in a one-file-per-module UI; weights
+# are identical, only re-packaged into a single safetensors
 # Tokenizer/config for the Qwen3 text tower is FIXED (verified byte-identical
 # between the official Ideogram release and the abliterated TE repo: same model,
 # vocab 151643, same added_tokens). It ships inside Forge under

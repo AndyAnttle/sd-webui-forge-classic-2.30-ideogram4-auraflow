@@ -44,6 +44,8 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 > prompt is still accepted (it is wrapped into a minimal valid caption automatically),
 > but expect noticeably weaker results and more refusals without the Studio.
 
+<p align="center"><img src="html\ideogram4_studio.webp" width=768 alt="Ideogram 4 Studio: region canvas, scene fields and the generated JSON caption"></p>
+
 > [!Note]
 > **Ideogram 4 Studio needs a second half: the unconditional model.**
 > The official pipeline pairs the main checkpoint with an *unconditional* counterpart used

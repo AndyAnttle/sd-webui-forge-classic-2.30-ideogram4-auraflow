@@ -557,6 +557,7 @@
                 `<button class="id4s-seg${el.type === "text" ? " on" : ""}" data-ed="type-text" title="literal text">T</button>` +
                 `<button class="id4s-seg${el.bbox ? " on" : ""}" data-ed="togglebbox" title="${el.bbox ? "has a box — click to let the model auto-place" : "auto-placed — click to give it a box"}">${el.bbox ? "▣" : "❔"}</button>` +
                 `<span class="id4s-spacer"></span>` +
+                `<button class="id4s-seg" data-ed="delete" title="delete this element">&#10005;</button>` +
                 `<button class="id4s-seg" data-ed="duplink" title="linked copy — shares the prompt, own position">&#128279;+</button>` +
                 (el.linkId ? `<button class="id4s-seg" data-ed="unlink" title="unlink">&#128279;&#822;</button>` : "") +
                 `<button class="id4s-seg${el.enabled === false ? " off" : ""}" data-ed="mute" title="${el.enabled === false ? "muted — click to enable" : "mute (keep, exclude from output)"}">${el.enabled === false ? "◌" : "◉"}</button>`;
@@ -564,7 +565,7 @@
             if (el.type === "text")
                 html += `<div class="id4s-field"><span>text</span><input data-ed="text" value="${esc(el.text)}" placeholder="literal text the model should draw"></div>`;
             html += `<div class="id4s-field"><span>desc</span><textarea data-ed="desc" rows="3" placeholder="${el.type === "text" ? "how the text looks (font, colour, placement)" : "detailed description of this object"}">${esc(el.desc)}</textarea></div>`;
-            html += `<div class="id4s-field"><span>colours</span><span class="id4s-pal">${(el.color_palette || []).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<input type="color" data-ed="addpal" title="add color (max 5)"></span></div>`;
+            html += `<div class="id4s-field"><span>colours</span><span class="id4s-pal">${(el.color_palette || []).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<button class="id4s-seg" data-ed="addpalbtn" title="pick another color (max 5)">+</button><input type="color" data-ed="addpal" style="opacity:0;width:1px;border:0;padding:0" title="color picker"></span></div>`;
             body.innerHTML = html;
         }
         root.addEventListener("input", (ev) => {
@@ -581,7 +582,7 @@
             // adding on 'input' would add the color while the picker is still open
             // and re-render would kill the live picker (colors got stuck).
             if (ev.target.dataset.ed === "addpal") {
-                const e = getElement(current);
+                const e = getElement(primaryId());
                 if (e) {
                     e.color_palette = e.color_palette || [];
                     const v = ev.target.value;
@@ -608,6 +609,11 @@
             else if (ed === "mute") { el.enabled = el.enabled === false; commit(); afterMutate(); }
             else if (ed === "duplink") linkDuplicate(el.id);
             else if (ed === "unlink") unlink(el.id);
+            else if (ed === "delete") { removeElements([el.id]); }
+            else if (ed === "addpalbtn") {
+                const ci = ev.target.parentElement.querySelector('input[data-ed="addpal"]');
+                if (ci) ci.click();
+            }
         });
 
         // scene fields

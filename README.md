@@ -27,6 +27,59 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 
 #### New Features
 
+- [X] Support [Ideogram 4.0](https://huggingface.co/ideogram-research/Ideogram-4.0)
+    - use **Ideogram 4 Studio** (see below) instead of the plain prompt box
+    - requires two accompanying modules (selected in the VAE / Text Encoder dropdowns):
+        - the Flux2-family VAE (`Ideogram4-flux2-vae.safetensors`, see [Download Models](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Download-Models))
+        - an **abliterated** Qwen3-VL text encoder (auto-downloaded from
+          [noelthekke/ideogram4-text-encoder-abliterated](https://huggingface.co/noelthekke/ideogram4-text-encoder-abliterated)
+          if none is selected)
+    - pick the **Ideogram4** preset in **Settings/Presets** (Euler / Simple / 20 steps / CFG 7)
+
+> [!Important]
+> **Ideogram 4 works best through its Studio, not as a plain prompt.**
+> The model was trained on structured JSON captions (description + regions + style).
+> The built-in **Ideogram 4 Studio** builds this format for you: a canvas where you draw
+> regions (objects / text), describe the background and pick style fields. A plain text
+> prompt is still accepted (it is wrapped into a minimal valid caption automatically),
+> but expect noticeably weaker results and more refusals without the Studio.
+
+> [!Note]
+> **Ideogram 4 Studio needs a second half: the unconditional model.**
+> The official pipeline pairs the main checkpoint with an *unconditional* counterpart used
+> for the negative branch. Two options are available in the Studio panel:
+> - **Unconditional LoRA** (default): the engine fetches `ideogram4_unconditional.safetensors`
+>   into `models/Lora/` automatically; nothing to do.
+> - **Full unconditional checkpoint** (recommended, matches the official design): download
+>   the official `Ideogram-4-unconditional` release and place it **in the same folder as the
+>   main checkpoint** — the Studio finds it automatically by the `unconditional` part of the
+>   file name. With no unconditional file present the Studio shows a download hint and the
+>   LoRA path stays active.
+
+- [X] Support [AuraFlow](https://huggingface.co/fal/AuraFlow) and **Pony v7** (AuraFlow variant)
+    - pick the **AuraFlow** preset in **Settings/Presets** (Euler / FlowMatchEulerDiscrete /
+      30 steps / CFG 3.5 / Shift 1.73)
+    - AuraFlow is **not** guidance-distilled: keep CFG ≈ 3.5 (CFG 1.0 silently disables guidance)
+    - community **Pony v7** checkpoints store the small text encoder (pile-T5) and VAE as
+      separate files — select them in the Text Encoder / VAE dropdowns when they are not
+      embedded in the checkpoint
+    - works with `fp8_scaled` and `GGUF` re-quantized releases
+
+> [!Tip]
+> **Practical notes for Ideogram 4 / AuraFlow / Pony v7**
+> - Select the matching **Preset** once in **Settings/Presets** — every parameter field
+>   (sampler, scheduler, steps, CFG, Shift) then fills with the values the model's authors
+>   recommend; per-model overrides are saved per preset like any other checkpoint selection.
+> - Ideogram 4 is a large 13B model: generation is several times slower than AuraFlow (~2B)
+>   at the same resolution, and on a 24 GB card the text encoder is swapped out of VRAM
+>   between prompt encoding and sampling — the first generation after a model load takes an
+>   extra minute while the models shuffle. This is normal; repeated generations are fast.
+> - Like the other large models here, these benefit from the speed flags
+>   (`--cuda-malloc --cuda-stream --pin-shared-memory`) and from keeping LoRA patching
+>   baked (not on-the-fly) when LoRAs are used.
+> - Pony v7 image style follows the AuraFlow conventions (its fine-tune); use higher
+>   resolutions (1024+), which the Pony author also recommends.
+
 - [X] Support [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1)
 - [X] Support [Krea 2](https://huggingface.co/krea/Krea-2-Turbo)
 - [X] Support **Krea 2 Identity Edit**

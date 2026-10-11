@@ -574,15 +574,22 @@
             if (ed === "boxColor") setShared(el.id, "boxColor", ev.target.value);
             else if (ed === "text") setShared(el.id, "text", ev.target.value);
             else if (ed === "desc") setShared(el.id, "desc", ev.target.value);
-            else if (ed === "addpal" && (ev.target.tagName === "INPUT")) {
-                el.color_palette = el.color_palette || [];
-                if (el.color_palette.length < 5 && !el.color_palette.includes(ev.target.value)) {
-                    el.color_palette.push(ev.target.value); push(); renderEditor(); renderBoxes();
-                }
-            }
         });
         root.addEventListener("change", (ev) => {
             if (ev.target.dataset.ed === "desc" || ev.target.dataset.ed === "text") commit();
+            // color picker: 'change' fires once, only on the picker's OK/apply —
+            // adding on 'input' would add the color while the picker is still open
+            // and re-render would kill the live picker (colors got stuck).
+            if (ev.target.dataset.ed === "addpal") {
+                const e = getElement(current);
+                if (e) {
+                    e.color_palette = e.color_palette || [];
+                    const v = ev.target.value;
+                    if (e.color_palette.length < 5 && !e.color_palette.includes(v)) {
+                        e.color_palette.push(v); push(); renderEditor(); renderBoxes();
+                    }
+                }
+            }
         });
         root.addEventListener("click", (ev) => {
             const ed = ev.target.dataset.ed;
@@ -1002,7 +1009,9 @@
             // sanity
             if (e.bbox) e.bbox = e.bbox.map(clamp);
             e.enabled = e.enabled !== false;
-            e.color_palette = Array.isArray(e.color_palette) ? e.color_palette : [];
+            const pal = Array.isArray(e.color_palette) ? e.color_palette : [];
+            const seen = []; for (const c of pal) { const v = String(c).toLowerCase(); if (!seen.includes(v)) seen.push(v); }
+            e.color_palette = seen.slice(0, 5);
         }
         if (state.overlay && state.overlay.showLabels === false) { showLabels = false; q("#labels-btn", root).classList.remove("on"); }
         if (state.preset) {

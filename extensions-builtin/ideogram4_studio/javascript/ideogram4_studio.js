@@ -564,7 +564,7 @@
             if (el.type === "text")
                 html += `<div class="id4s-field"><span>text</span><input data-ed="text" value="${esc(el.text)}" placeholder="literal text the model should draw"></div>`;
             html += `<div class="id4s-field"><span>desc</span><textarea data-ed="desc" rows="3" placeholder="${el.type === "text" ? "how the text looks (font, colour, placement)" : "detailed description of this object"}">${esc(el.desc)}</textarea></div>`;
-            html += `<div class="id4s-field"><span>colours</span><span class="id4s-pal">${(el.color_palette || []).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<input type="color" data-ed="addpal" title="add color (max 5)"><button class="id4s-seg" data-ed="copybox" title="replace this element's palette with its canvas marker color (what the model receives)">⬐ canvas</button></span></div>`;
+            html += `<div class="id4s-field"><span>colours ${((el.color_palette || []).length)}/5</span><span class="id4s-pal">${(el.color_palette || []).slice(0, 5).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<input type="color" data-ed="addpal" title="add color (max 5 total)"><button class="id4s-seg" data-ed="copybox" title="replace this element's palette with its canvas marker color (what the model receives)">⬐ canvas</button></span></div>`;
             body.innerHTML = html;
         }
         root.addEventListener("input", (ev) => {

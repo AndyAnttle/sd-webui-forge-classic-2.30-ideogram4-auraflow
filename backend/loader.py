@@ -14,6 +14,7 @@ from transformers.modeling_utils import no_init_weights
 import backend.args
 from backend import memory_management, utils
 from backend.diffusion_engine.anima import Anima
+from backend.diffusion_engine.auraflow import AuraFlow
 from backend.diffusion_engine.chroma import Chroma
 from backend.diffusion_engine.ernie import ErnieImage
 from backend.diffusion_engine.flux import Flux
@@ -27,6 +28,7 @@ from backend.diffusion_engine.qwen21 import QwenImage21
 from backend.diffusion_engine.sd15 import StableDiffusion
 from backend.diffusion_engine.sdxl import StableDiffusionXL, StableDiffusionXLRefiner
 from backend.diffusion_engine.wan import Wan
+from backend.diffusion_engine.ideogram4 import Ideogram4
 from backend.diffusion_engine.zimage import ZImage
 from backend.logging import setup_logger
 from backend.operations import using_forge_operations
@@ -44,7 +46,7 @@ from backend.utils import (
 )
 from modules_forge.packages.comfy.utils import convert_diffusers_mmdit
 
-possible_models: tuple["ForgeDiffusionEngine"] = (StableDiffusion, StableDiffusionXLRefiner, StableDiffusionXL, Mugen, Chroma, Flux, Flux2, Wan, QwenImage, QwenImage21, Krea2, Lumina2, ZImage, Anima, ErnieImage, PiD)
+possible_models: tuple["ForgeDiffusionEngine"] = (StableDiffusion, StableDiffusionXLRefiner, StableDiffusionXL, Mugen, Chroma, Flux, Flux2, Wan, QwenImage, QwenImage21, Krea2, Lumina2, ZImage, Anima, ErnieImage, PiD, AuraFlow, Ideogram4)
 
 logger = logging.getLogger("loader")
 setup_logger(logger)
@@ -151,6 +153,19 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             load_state_dict(model, state_dict, ignore_start="loss.")
             return model
+        if cls_name == "Ideogram4AutoencoderKL":
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have VAE state dict!"
+            from backend.nn.ideogram4_vae import Ideogram4AutoEncoder, convert_ideogram4_vae_state_dict
+
+            config = Ideogram4AutoEncoder.load_config(config_path)
+            state_dict = convert_ideogram4_vae_state_dict(state_dict)
+
+            with no_init_weights():
+                with using_forge_operations(device=memory_management.cpu, dtype=memory_management.vae_dtype(), extra_dtype="vae"):
+                    model = Ideogram4AutoEncoder.from_config(config)
+
+            load_state_dict(model, state_dict, ignore_start="loss.")
+            return model
         if cls_name in ["AutoencoderKLWan", "AutoencoderKLQwenImage"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have VAE state dict!"
 
@@ -253,6 +268,69 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             load_state_dict(model, state_dict, log_name=cls_name)
             return model
+        if cls_name in ["Qwen3VLForConditionalGeneration", "Qwen3VLTextModel"] and getattr(guess, "huggingface_repo", "") == "Ideogram4":
+            # Ideogram 4 text encoder = Qwen3-VL-8B. We only need the text tower,
+            # which has the exact same structure as Forge's Qwen3_8B (hidden 4096,
+            # 36 layers, heads 32, kv 8, inter 12288, vocab 151936). Filter out the
+            # vision tower (visual.*) and lm_head, then load into Qwen3_8B.
+            # NOTE: deliberately guarded to the Ideogram4 guess - Qwen-Image-2.1
+            # uses the same cls_name but its own Qwen3VL(8b) branch below.
+            assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3-VL state dict!"
+
+            config = read_arbitrary_config(config_path)
+            # The Qwen3-VL config nests the text config under "text_config".
+            text_config = config.get("text_config", config)
+
+            from backend.nn.llm.llama import Qwen3_8B as QTE
+
+            # Qwen3_8B asserts config keys against its defaults. The Qwen3-VL text
+            # tower has the same architecture but different rope_theta / max_position
+            # embeddings. Strip those so the model uses Qwen3_8B defaults.
+            text_config = {k: v for k, v in text_config.items() if k not in ("rope_theta", "max_position_embeddings")}
+
+            # Normalize keys to the layout Qwen3_8B expects: every text-tower key
+            # must carry the "model." prefix. Handles all three source layouts:
+            #   Comfy full (fp8/heretic): model.transformer.model.layers.0...
+            #   flat (abliterated):       embed_tokens.weight, layers.0...
+            text_sd = {}
+            for k, v in state_dict.items():
+                for pref in ("model.transformer.", "transformer."):
+                    if k.startswith(pref):
+                        k = k[len(pref):]
+                        break
+                if k.startswith("lm_head."):
+                    continue
+                if k.startswith("model.visual.") or k.startswith("visual."):
+                    continue
+                if not k.startswith("model."):
+                    k = "model." + k
+                text_sd[k] = v
+
+            storage_dtype = memory_management.text_encoder_dtype()
+            state_dict_dtype = utils.weight_dtype(text_sd)
+            quant_config = detect_quantization(text_sd)
+
+            if quant_config is not None:
+                storage_dtype = state_dict_dtype
+                logger.info("Using MixedPrecision for Qwen3-VL")
+            elif state_dict_dtype in [torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"]:
+                storage_dtype = state_dict_dtype
+                _log = f"{storage_dtype}" + " (pre-quant)" if state_dict_dtype in ["nf4", "fp4", "gguf"] else ""
+                logger.info(f"Using Detected Qwen3-VL Data Type: {_log}")
+            else:
+                logger.info(f"Using Default Qwen3-VL Data Type: {storage_dtype}")
+
+            if storage_dtype in ["nf4", "fp4", "gguf"]:
+                with no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=False, extra_dtype=storage_dtype):
+                        model = QTE(text_config)
+            else:
+                with no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True, sd_dtype=state_dict_dtype, extra_dtype=quant_config):
+                        model = QTE(text_config)
+
+            load_state_dict(model, text_sd, log_name=cls_name, ignore_start="lm_head.")
+            return model
         if cls_name in ["Qwen3Model", "Qwen3ForCausalLM", "Qwen3VLModel", "Qwen3VLForConditionalGeneration"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
 
@@ -331,7 +409,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
         # region UNet / DiT
 
-        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "ChromaTransformer2DModel", "WanTransformer3DModel", "QwenImageTransformer2DModel", "QwenImage21Transformer2DModel", "Lumina2Transformer2DModel", "ZImageTransformer2DModel", "CosmosTransformer3DModel", "ErnieImageTransformer2DModel", "PiDTransformer2DModel", "Krea2Transformer2DModel"]:
+        if cls_name in ["UNet2DConditionModel", "FluxTransformer2DModel", "Flux2Transformer2DModel", "ChromaTransformer2DModel", "WanTransformer3DModel", "QwenImageTransformer2DModel", "QwenImage21Transformer2DModel", "Lumina2Transformer2DModel", "ZImageTransformer2DModel", "CosmosTransformer3DModel", "ErnieImageTransformer2DModel", "PiDTransformer2DModel", "Krea2Transformer2DModel", "AuraFlowTransformer2DModel", "Ideogram4Transformer2DModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have model state dict!"
             pre_func: Callable[[torch.nn.Module], torch.nn.Module] = lambda mdl: mdl
             model_loader = None
@@ -401,6 +479,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 from backend.nn.krea import SingleStreamDiT
 
                 model_loader = lambda c: SingleStreamDiT(**c)
+            elif cls_name == "AuraFlowTransformer2DModel":
+                from backend.nn.auraflow import MMDiT
+
+                model_loader = lambda c: MMDiT(**c)
+            elif cls_name == "Ideogram4Transformer2DModel":
+                from backend.nn.ideogram4 import Ideogram4Transformer, Ideogram4Config
+
+                model_loader = lambda c: Ideogram4Transformer(Ideogram4Config.from_dict(c))
 
             load_device = memory_management.get_torch_device()
             offload_device = memory_management.unet_offload_device()
@@ -417,9 +503,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             elif quant_config is not None:
                 storage_dtype = torch.bfloat16
                 logger.info("Using MixedPrecision for Model")
-            elif state_dict_dtype in (torch.float8_e4m3fn, torch.float8_e5m2, "gguf"):
+            elif state_dict_dtype in (torch.float8_e4m3fn, torch.float8_e5m2, "nf4", "fp4", "gguf"):
                 storage_dtype = state_dict_dtype
-                _log = f"{state_dict_dtype}" + (" (pre-quant)" if state_dict_dtype == "gguf" else "")
+                _log = f"{state_dict_dtype}" + (" (pre-quant)" if state_dict_dtype in ("nf4", "fp4", "gguf") else "")
                 logger.info(f"Using Detected Model Data Type: {_log}")
                 if state_dict_dtype == "gguf":
                     beautiful_print_gguf_state_dict_statics(state_dict)
@@ -440,7 +526,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             backend.args.dynamic_args.ops = None
 
-            if storage_dtype == "gguf":
+            if storage_dtype in ("nf4", "fp4", "gguf"):
                 initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
                 need_manual_cast = False
                 to_args = dict(device=initial_device, dtype=computation_dtype)
@@ -482,6 +568,14 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
         from backend.loader_gguf import gguf_remapping
 
         asd = gguf_remapping(asd)
+
+    #   Qwen3-VL full encoder (text + vision tower). For Ideogram4 we only use
+    #   the text tower, so strip the vision keys and lm_head BEFORE the branch
+    #   chain - otherwise the file is misrouted by the VL branches. Guarded to
+    #   the Ideogram4 guess: Qwen-Image-2.1 uses the same file format and DOES
+    #   need its visual tower keys (Qwen3VL 8b branch).
+    if getattr(guess, "huggingface_repo", "") == "Ideogram4" and "model.layers.0.post_attention_layernorm.weight" in asd and any(k.startswith("model.visual.") for k in asd):
+        asd = {k: v for k, v in asd.items() if not (k.startswith("model.visual.") or k.startswith("lm_head."))}
 
     #   flux 2
     if "decoder.post_quant_conv.weight" in asd:
@@ -708,6 +802,12 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
         for k, v in asd.items():
             sd[f"{text_encoder_key_prefix}qwen3_{size}.transformer.{k}"] = v
 
+    elif "layers.0.post_attention_layernorm.weight" in asd and "layers.0.self_attn.q_norm.weight" in asd:
+        # Flat keys without 'model.' prefix (abliterated Qwen3VLTextModel shards merged).
+        # Route to qwen3_vl to match clip_target in model_list.py.
+        for k, v in asd.items():
+            sd[f"{text_encoder_key_prefix}qwen3_vl.transformer.model.{k}"] = v
+
     elif "model.layers.0.post_attention_layernorm.weight" in asd:
         weight: torch.Tensor = asd["model.layers.0.post_attention_layernorm.weight"]
         assert weight.shape[0] == 3072
@@ -815,7 +915,15 @@ def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike
         for asd in additional_state_dicts:
             _asd, _meta = load_torch_file(asd, return_metadata=True)
             _asd, _ = convert_quantization(_asd, _meta)
+            _prev_sd_keys = set(sd.keys())
             sd = replace_state_dict(sd, _asd, guess, asd)
+            _routed = set(sd.keys()) - _prev_sd_keys
+            _te_prefix = (guess.text_encoder_key_prefix[0] if getattr(guess, "text_encoder_key_prefix", None) else "")
+            for _prefix in ("qwen3_vl.", "qwen3_8b.", "qwen3_06b.", "qwen3_4b.", "qwen3vl_4b.", "qwen25_7b.", "gemma2_2b.", "ministral3_3b.", "t5xxl.", "umt5xxl.", "clip.", "clip_g.", "clip_l."):
+                if any(k.startswith(_te_prefix + _prefix) for k in _routed):
+                    guess.te_source_files = getattr(guess, "te_source_files", {})
+                    guess.te_source_files[_prefix.rstrip(".")] = str(asd)
+                    break
             del _asd
 
     guess.clip_target = guess.clip_target(sd)

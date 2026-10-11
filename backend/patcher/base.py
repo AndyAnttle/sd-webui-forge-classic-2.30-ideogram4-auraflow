@@ -453,6 +453,16 @@ class ModelPatcher:
         if key not in self.backup and not return_weight:
             self.backup[key] = collections.namedtuple("Dimension", ["weight", "inplace_update"])(weight.to(device=self.offload_device, copy=inplace_update), inplace_update)
 
+        # bnb 4-bit weights cannot be merged into directly: dequantize for the
+        # merge, then reload the patched weight back into the 4-bit layer.
+        bnb_layer = None
+        if hasattr(weight, "bnb_quantized"):
+            assert memory_management.bnb_enabled()
+            from backend.operations_bnb import functional_dequantize_4bit
+
+            bnb_layer, _, _ = utils.get_attr_with_parent(self.model, key)
+            weight = functional_dequantize_4bit(weight)
+
         temp_dtype = memory_management.lora_compute_dtype(device_to) if key in self.patches else None
         if device_to is not None:
             temp_weight = memory_management.cast_to_device(weight, device_to, temp_dtype, copy=True)
@@ -462,6 +472,11 @@ class ModelPatcher:
             temp_weight = convert_func(temp_weight, inplace=True)
 
         out_weight = merge_lora_to_weight(self.patches[key], temp_weight, key) if key in self.patches else temp_weight
+
+        if bnb_layer is not None:
+            bnb_layer.reload_weight(out_weight)
+            return
+
         if set_func is None:
             if key in self.patches:
                 out_weight = stochastic_rounding(out_weight, weight.dtype, seed=string_to_seed(key))

@@ -12,6 +12,8 @@ else:
 activations = {
     "gelu_pytorch_tanh": lambda a: torch.nn.functional.gelu(a, approximate="tanh"),
     "relu": torch.nn.functional.relu,
+    # AuraFlow's UMT5 ("gelu_new" in its config; the original fork mapped this too)
+    "gelu_new": lambda a: 0.5 * a * (1.0 + torch.erf(a * 0.7071067811865476)),
 }
 
 

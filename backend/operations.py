@@ -208,6 +208,7 @@ def main_stream_worker(weight, bias, offload_stream: tuple[torch.Stream, torch.T
 current_device: torch.device = None
 current_dtype: torch.dtype = None
 current_manual_cast_enabled: bool = False
+current_bnb_dtype: str = None
 
 
 # region Forge OPs
@@ -396,6 +397,48 @@ class ForgeOperations:
                     return torch.nn.functional.embedding(x, weight, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
             else:
                 return super().forward(x)
+
+
+# region BnB
+
+
+if memory_management.bnb_enabled():
+
+    from backend.operations_bnb import (
+        ForgeLoader4Bit,
+        functional_dequantize_4bit,
+        functional_linear_4bits,
+    )
+
+    class ForgeOperationsBNB4bits(ForgeOperations):
+        class Linear(ForgeLoader4Bit, ForgeWeights):
+            def __init__(self, *args, **kwargs):
+                super().__init__(device=current_device, dtype=current_dtype, quant_type=current_bnb_dtype)
+                self.parameters_manual_cast = current_manual_cast_enabled
+
+            def forward(self, x):
+                if self.bias is not None and self.bias.dtype != x.dtype:
+                    self.bias = utils.tensor2parameter(self.bias.to(x.dtype))
+
+                if hasattr(self, "forge_online_loras"):
+                    weight, bias, signal = weights_manual_cast(self, x, weight_fn=functional_dequantize_4bit, skip_bias_dtype=True)
+                    with main_stream_worker(weight, bias, signal):
+                        return torch.nn.functional.linear(x, weight, bias)
+
+                if not self.parameters_manual_cast:
+                    return functional_linear_4bits(x, self.weight, self.bias)
+                elif not self.weight.bnb_quantized:
+                    assert x.device.type == "cuda", "BnB must use CUDA as Computation Device"
+                    layer_original_device = self.weight.device
+                    self.weight = self.weight._quantize(x.device)
+                    bias = self.bias.to(x.device) if self.bias is not None else None
+                    out = functional_linear_4bits(x, self.weight, bias)
+                    self.weight = self.weight.to(layer_original_device)
+                    return out
+                else:
+                    weight, bias, signal = weights_manual_cast(self, x, skip_weight_dtype=True, skip_bias_dtype=True)
+                    with main_stream_worker(weight, bias, signal):
+                        return functional_linear_4bits(x, weight, bias)
 
 
 # region GGUF
@@ -695,6 +738,11 @@ def using_forge_operations(
     if operations is None:
         if extra_dtype in ["gguf"]:
             operations = ForgeOperationsGGUF
+        elif extra_dtype in ["nf4", "fp4"]:
+            assert memory_management.bnb_enabled(), 'Install the "bitsandbytes" package with --bnb'
+            global current_bnb_dtype
+            current_bnb_dtype = extra_dtype
+            operations = ForgeOperationsBNB4bits
         elif extra_dtype in ["vae"] and args.tiled_conv2d:
             memory_management.logger.info(f"Using TiledOperations ({args.tiled_conv2d}) for VAE")
             operations = TiledOperations

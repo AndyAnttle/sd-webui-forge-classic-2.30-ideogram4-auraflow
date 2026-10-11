@@ -248,6 +248,53 @@ class Flux2(LatentFormat):
         return latent
 
 
+class Ideogram4(Flux2):
+    """Ideogram 4: 128 packed latent channels with per-channel shift/scale.
+
+    The official pipeline normalizes the latent space: decode applies
+    ``z * scale + shift`` before the VAE decoder, and encode applies the
+    inverse ``(z - shift) / scale`` after the VAE encoder.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Import the constants lazily to avoid a circular import at module load.
+        from backend.nn.ideogram4_vae import LATENT_SHIFT, LATENT_SCALE
+
+        self.latents_mean = torch.tensor(LATENT_SHIFT, dtype=torch.float32).view(1, 128, 1, 1)
+        self.latents_std = torch.tensor(LATENT_SCALE, dtype=torch.float32).view(1, 128, 1, 1)
+
+        # Live preview (RGB method) maps the SAMPLING latent (normalized 128ch
+        # space, no unpack) to RGB. Since a 128-channel latent carries 4 packed
+        # sub-pixels per Flux2 base channel (k = c*4 + pi*2 + pj), we bake the
+        # de-normalization (raw = z * scale + shift) into the inherited Flux2
+        # factors and produce a 1/2-resolution averaged preview:
+        #   factor128[k] = flux2_factor[k // 4] * LATENT_SCALE[k] / 4
+        #   bias128      = flux2_bias + sum_c flux2_factor[c] * (sum of 4 shifts of c) / 4
+        self.latent_rgb_factors_reshape = None
+        base_factors = torch.tensor(self.latent_rgb_factors, dtype=torch.float32)  # (32,3)
+        base_bias = torch.tensor(self.latent_rgb_factors_bias, dtype=torch.float32)  # (3,)
+        scale = torch.tensor(LATENT_SCALE, dtype=torch.float32)                    # (128,)
+        shift = torch.tensor(LATENT_SHIFT, dtype=torch.float32)                    # (128,)
+        expanded = base_factors.repeat_interleave(4, dim=0) * scale.unsqueeze(1) / 4.0  # (128,3)
+        shift_sums = shift.reshape(32, 4).sum(dim=1)  # (32,)
+        bias = base_bias + base_factors.transpose(0, 1) @ shift_sums / 4.0  # (3,)
+        self.latent_rgb_factors = expanded.tolist()
+        self.latent_rgb_factors_bias = bias.tolist()
+
+    def process_in(self, latent):
+        # Encode side: map raw VAE latent -> normalized latent space
+        mean = self.latents_mean.to(latent.device, latent.dtype)
+        std = self.latents_std.to(latent.device, latent.dtype)
+        return (latent - mean) / std
+
+    def process_out(self, latent):
+        # Decode side: map normalized latent space -> raw VAE latent
+        mean = self.latents_mean.to(latent.device, latent.dtype)
+        std = self.latents_std.to(latent.device, latent.dtype)
+        return latent * std + mean
+
+
 class SDXL_Flux2(Flux2):
     def __init__(self):
         super().__init__()

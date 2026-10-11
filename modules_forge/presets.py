@@ -15,6 +15,8 @@ class PresetArch(Enum):
     pid = 11  # PiD
     krea = 12  # Krea2
     qwen21 = 13  # Qwen-Image-2.1
+    ideogram4 = 14  # Ideogram 4
+    auraflow = 15  # AuraFlow
 
     @staticmethod
     def choices() -> list[str]:
@@ -35,6 +37,8 @@ SAMPLERS = {
     PresetArch.pid: "LCM",
     PresetArch.krea: "Euler",
     PresetArch.qwen21: "Euler",
+    PresetArch.ideogram4: "Euler",
+    PresetArch.auraflow: "Euler",
 }
 
 SCHEDULERS = {
@@ -51,6 +55,8 @@ SCHEDULERS = {
     PresetArch.pid: "Simple",
     PresetArch.krea: "Simple",
     PresetArch.qwen21: "Simple",
+    PresetArch.ideogram4: "Simple",
+    PresetArch.auraflow: "FlowMatchEulerDiscrete",
 }
 
 STEPS = {
@@ -67,6 +73,10 @@ STEPS = {
     PresetArch.pid: 4,
     PresetArch.krea: 8,
     PresetArch.qwen21: 32,
+    PresetArch.ideogram4: 20,
+    # AuraFlow/Pony v7: official fal example uses 50 steps; Pony author page says
+    # "at least 30 steps". 30 is the safe floor, 40-50 for finer detail.
+    PresetArch.auraflow: 30,
 }
 
 CFG = {
@@ -83,6 +93,14 @@ CFG = {
     PresetArch.pid: 1.0,
     PresetArch.krea: 1.0,
     PresetArch.qwen21: 2.5,
+    # Ideogram4 is NOT guidance-distilled: official pipeline uses real CFG
+    # (V4_DEFAULT_20: guidance 7.0, last 2 steps polish at 3.0). The engine
+    # applies the polish automatically; UI CFG must be 7.0.
+    PresetArch.ideogram4: 7.0,
+    # AuraFlow is NOT guidance-distilled (unlike Z-Image): fal official example uses
+    # guidance_scale=3.5; SimpleTuner AuraFlow guide says 3.5-4.0; Pony community runs
+    # at 3.5-4.75. CFG 1.0 here would disable guidance entirely (negative prompts ignored).
+    PresetArch.auraflow: 3.5,
 }
 
 DISTILL = {
@@ -98,6 +116,7 @@ SHIFT = {
     PresetArch.ernie: 3.0,
     PresetArch.pid: -1.5,
     PresetArch.krea: -1.15,
+    PresetArch.auraflow: 1.73,
 }
 
 FRAMES = {

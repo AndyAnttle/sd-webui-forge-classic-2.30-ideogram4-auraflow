@@ -687,6 +687,84 @@ class PiD(BASE):
             return {"gemma2_2b": "text_encoder"}
 
 
+class AuraFlow(BASE):
+    huggingface_repo = "AuraFlow"
+
+    unet_config = {
+        "image_model": "aura_flow",
+    }
+
+    sampling_settings = {
+        "shift": 1.73,
+    }
+
+    memory_usage_factor = 2.5
+
+    unet_extra_config = {}
+    latent_format = latent.SDXL
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def model_type(self, state_dict):
+        return ModelType.FLOW
+
+    def clip_target(self, state_dict: dict):
+        # AuraFlow conditions on its own small UMT5. Two layouts:
+        #   embedded (original AuraFlow ckpts): keys under "pile_t5xl."
+        #   standalone pile TE file: routed by the shared T5 branch under "t5xxl."
+        pref = self.text_encoder_key_prefix[0]
+        for tag in ("pile_t5xl", "t5xxl"):
+            if "{}{}.transformer.encoder.final_layer_norm.weight".format(pref, tag) in state_dict:
+                return {tag: "text_encoder"}
+            if "{}{}.transformer.encoder.final_layer_norm.qweight".format(pref, tag) in state_dict:
+                return {tag: "text_encoder"}
+        return {}
+
+
+class Ideogram4(BASE):
+    huggingface_repo = "Ideogram4"
+
+    unet_config = {
+        "image_model": "ideogram4",
+    }
+
+    sampling_settings = {
+        "mu": 0.0,
+        "std": 1.75,
+        "num_steps": 20,
+    }
+
+    memory_usage_factor = 14.6  # 9.28B params, 128-channel packed latent
+
+    unet_extra_config = {}
+    latent_format = latent.Ideogram4
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def model_type(self, state_dict):
+        return ModelType.FLOW
+
+    def clip_target(self, state_dict: dict):
+        pref = self.text_encoder_key_prefix[0]
+        # Two possible prefixes depending on encoder format:
+        #   qwen3_vl: flat keys (abliterated)
+        #   qwen3_8b: full keys (fp8/heretic)
+        for tag in ("qwen3_vl", "qwen3_8b"):
+            if "{}{}.transformer.model.layers.0.post_attention_layernorm.weight".format(pref, tag) in state_dict:
+                return {tag: "text_encoder"}
+        return {}
+
+
 models = [
     SD15,
     SDXL,
@@ -707,4 +785,6 @@ models = [
     Krea2,
     ErnieImage,
     PiD,
+    AuraFlow,
+    Ideogram4,
 ]

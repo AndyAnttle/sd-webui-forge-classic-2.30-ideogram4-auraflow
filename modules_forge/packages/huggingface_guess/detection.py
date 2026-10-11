@@ -293,6 +293,40 @@ def detect_unet_config(state_dict: dict, key_prefix: str) -> dict:
         dit_config = {"image_model": "ernie"}
         return dit_config
 
+    if "{}double_layers.0.attn.w1q.weight".format(key_prefix) in state_dict_keys:  # AuraFlow
+        dit_config = {}
+        dit_config["image_model"] = "aura_flow"
+        dit_config["in_channels"] = 4
+        dit_config["out_channels"] = 4
+        dit_config["patch_size"] = 2
+        dit_config["dim"] = int(state_dict["{}double_layers.0.attn.w1q.weight".format(key_prefix)].shape[0])
+        dit_config["n_heads"] = int(state_dict["{}double_layers.0.attn.w1q.weight".format(key_prefix)].shape[0] // 256)
+        dit_config["global_conddim"] = dit_config["dim"]
+        dit_config["cond_seq_dim"] = int(state_dict["{}cond_seq_linear.weight".format(key_prefix)].shape[1])
+        dit_config["max_seq"] = int(state_dict["{}positional_encoding".format(key_prefix)].shape[1])
+        double_layers = count_blocks(state_dict_keys, '{}double_layers.'.format(key_prefix) + '{}.')
+        single_layers = count_blocks(state_dict_keys, '{}single_layers.'.format(key_prefix) + '{}.')
+        dit_config["n_double_layers"] = double_layers
+        dit_config["n_layers"] = double_layers + single_layers
+        return dit_config
+
+    if "{}input_proj.weight".format(key_prefix) in state_dict_keys and "{}llm_cond_proj.weight".format(key_prefix) in state_dict_keys:  # Ideogram 4
+        dit_config = {}
+        dit_config["image_model"] = "ideogram4"
+        in_proj_w = state_dict["{}input_proj.weight".format(key_prefix)]
+        dit_config["emb_dim"] = int(in_proj_w.shape[0])
+        dit_config["in_channels"] = int(in_proj_w.shape[1])
+        dit_config["llm_features_dim"] = int(state_dict["{}llm_cond_proj.weight".format(key_prefix)].shape[1])
+        dit_config["num_layers"] = count_blocks(state_dict_keys, "{}layers.".format(key_prefix) + "{}.")
+        # intermediate_size from the first MLP w1
+        dit_config["intermediate_size"] = int(state_dict["{}layers.0.feed_forward.w1.weight".format(key_prefix)].shape[0])
+        # adanln_dim from the first block's adaln_modulation input
+        dit_config["adanln_dim"] = int(state_dict["{}layers.0.adaln_modulation.weight".format(key_prefix)].shape[1])
+        # num_heads from head_dim (norm_q weight is (head_dim,))
+        head_dim = int(state_dict["{}layers.0.attention.norm_q.weight".format(key_prefix)].shape[0])
+        dit_config["num_heads"] = dit_config["emb_dim"] // head_dim
+        return dit_config
+
     if "{}input_blocks.0.0.weight".format(key_prefix) not in state_dict_keys:
         return None
 
@@ -433,6 +467,7 @@ def top_candidate(state_dict, candidates):
 
 def unet_prefix_from_state_dict(state_dict: dict) -> str:
     candidates = (
+        "model.diffusion_model.model.",  # exports rooted at bare `model.` (doubled by preprocess_state_dict)
         "model.diffusion_model.",  # ldm/sgm models
         "net.",  # cosmos
     )

@@ -241,6 +241,13 @@ else:
     else:
         FLASH_IS_AVAILABLE = True
 
+try:
+    import bitsandbytes  # noqa: F401
+except Exception:
+    BNB_IS_AVAILABLE = False
+else:
+    BNB_IS_AVAILABLE = True
+
 
 if not args.pynvml:
     PYNVML_IS_AVAILABLE = False
@@ -1077,6 +1084,10 @@ def flash_enabled() -> bool:
     if not is_nvidia():
         return False
     return FLASH_IS_AVAILABLE
+
+
+def bnb_enabled() -> bool:
+    return BNB_IS_AVAILABLE
 
 
 def ck_enabled() -> bool:

@@ -1,0 +1,15 @@
+{
+  "_class_name": "Ideogram4Transformer2DModel",
+  "_diffusers_version": "0.37.1",
+  "_name_or_path": "ideogram-ai/ideogram-4-nf4",
+  "emb_dim": 4608,
+  "num_layers": 34,
+  "num_heads": 18,
+  "intermediate_size": 12288,
+  "adanln_dim": 512,
+  "in_channels": 128,
+  "llm_features_dim": 53248,
+  "rope_theta": 5000000,
+  "mrope_section": [24, 20, 20],
+  "norm_eps": 1e-5
+}

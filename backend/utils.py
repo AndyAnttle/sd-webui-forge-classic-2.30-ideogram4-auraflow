@@ -178,6 +178,13 @@ def calculate_parameters(sd: dict[str, torch.Tensor], prefix: str = "") -> int:
 def weight_dtype(sd: dict[str, torch.Tensor], prefix: str = "") -> torch.dtype | str:
     if any(hasattr(v, "gguf_cls") for v in sd.values()):
         return "gguf"
+    # bitsandbytes pre-quantized (nf4/fp4): weights stored as uint8 +
+    # "<weight>.quant_state.bitsandbytes__<type>" stat tensors.
+    for k in sd.keys():
+        if "bitsandbytes__nf4" in k:
+            return "nf4"
+        if "bitsandbytes__fp4" in k:
+            return "fp4"
 
     dtypes: dict[torch.dtype, int] = {}
     for k in sd.keys():

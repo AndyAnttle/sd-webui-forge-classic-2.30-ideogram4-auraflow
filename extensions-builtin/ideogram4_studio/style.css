@@ -1,0 +1,167 @@
+/* Ideogram 4 Studio — dark/light-safe via gradio vars */
+.id4s { display: flex; flex-direction: column; gap: 8px; color: var(--body-text-color, #ddd); font-size: 13px; }
+
+.id4s-toolbar { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.id4s-ic {
+    display: inline-flex; align-items: center; justify-content: center; text-align: center;
+    min-width: 32px; min-height: 30px; padding: 0 10px; box-sizing: border-box;
+    background: var(--button-secondary-background-fill, #333);
+    color: var(--body-text-color, #ddd);
+    border: 1px solid var(--input-border-color, #555);
+    border-radius: 5px; font-size: 13px; cursor: pointer; line-height: 1;
+}
+.id4s-ic:hover { border-color: var(--color-accent, #3b82f6); }
+.id4s-ic.on { background: var(--color-accent, #3b82f6); border-color: var(--color-accent, #3b82f6); color: #fff; }
+.id4s-txt { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; background: none; border: 1px solid var(--input-border-color, #555); color: inherit; border-radius: 5px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.id4s-txt:hover { border-color: var(--color-accent, #3b82f6); }
+.id4s-lbl { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; opacity: .8; }
+.id4s-div { width: 1px; height: 18px; background: var(--input-border-color, #555); margin: 0 2px; }
+.id4s-spacer { flex: 1 1 auto; }
+.id4s-count { font-size: 11px; opacity: .6; }
+.id4s-menu {
+    position: fixed; z-index: 1000; display: flex; flex-direction: column; gap: 3px;
+    background: rgba(24,26,31,.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--input-border-color, #555);
+    border-radius: 6px; padding: 6px; min-width: 180px; box-shadow: 0 6px 18px rgba(0,0,0,.4);
+}
+/* explicit display would beat the [hidden] attribute; restore it */
+.id4s-menu[hidden] { display: none; }
+.id4s-menu.ctx button { text-align: left; background: none; border: none; color: inherit; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.id4s-menu.ctx button:hover { background: var(--button-secondary-background-fill, #333); }
+.id4s-mgroup { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; opacity: .6; }
+.id4s-aspects { display: flex; flex-wrap: wrap; gap: 4px; }
+.id4s-achip { background: none; border: 1px solid var(--input-border-color, #555); color: inherit; border-radius: 4px; padding: 3px 6px; font-size: 11px; cursor: pointer; }
+.id4s-achip:hover, .id4s-achip.on { border-color: var(--color-accent, #3b82f6); }
+.id4s-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.id4s-hint { font-size: 10px; opacity: .55; }
+
+.id4s-main { display: grid; gap: 10px; align-items: stretch; grid-template-columns: minmax(280px, 1.15fr) minmax(320px, 1fr); }
+.id4s-stage-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.id4s-stage {
+    position: relative; width: 100%; aspect-ratio: 1 / 1;
+    background: var(--input-background-fill, #1c1c1c);
+    border: 1px solid var(--input-border-color, #555); border-radius: 6px;
+    overflow: hidden; touch-action: none; user-select: none; cursor: crosshair;
+}
+.id4s-stage:focus { outline: none; }
+.id4s-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; opacity: .6; }
+.id4s-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(to right, rgba(128,128,128,.15) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(128,128,128,.15) 1px, transparent 1px);
+    background-size: 10% 10%;
+}
+.id4s-box { position: absolute; box-sizing: border-box; cursor: move; background: transparent; }
+.id4s-box::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--c, #3b82f6); pointer-events: none; }
+.id4s-box:hover { background: var(--fill); }
+.id4s-box.sel { background: var(--fill); box-shadow: 0 0 0 1.5px var(--color-accent, #3b82f6); }
+.id4s-box.primary { box-shadow: 0 0 0 1px #fff, 0 0 0 2px var(--color-accent, #3b82f6); }
+.id4s-box.muted { opacity: .3; }
+.id4s-box.muted::after { border-style: dashed; }
+.id4s-draft { position: absolute; box-sizing: border-box; border: 2px dashed #9ca3af; background: rgba(156,163,175,.12); pointer-events: none; z-index: 9; }
+.id4s-draft.marquee { border: 1px solid var(--color-accent, #3b82f6); background: color-mix(in srgb, var(--color-accent, #3b82f6) 15%, transparent); }
+.id4s-groupframe { position: absolute; box-sizing: border-box; border: 1px dashed var(--gc, var(--color-accent, #3b82f6)); pointer-events: none; z-index: 8; }
+.id4s-groupframe .id4s-h { pointer-events: auto; }
+
+.id4s-tag {
+    position: absolute; top: 0; left: 0; transform: translateY(-100%);
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; line-height: 1.5; padding: 0 5px; white-space: nowrap;
+    max-width: 240px; overflow: hidden; border-radius: 3px 3px 0 0; pointer-events: none; color: #fff;
+}
+.id4s-tag .tagn { font-weight: 700; }
+.id4s-tag .tagt { display: none; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.id4s-box:hover .id4s-tag .tagt, .id4s-box.sel .id4s-tag .tagt, .id4s-box.primary .id4s-tag .tagt { display: inline; }
+.id4s-tag .gseg { width: 4px; align-self: stretch; margin-left: -5px; }
+
+.id4s-h { position: absolute; width: 11px; height: 11px; background: #fff; border: 1px solid #333; border-radius: 2px; z-index: 2; }
+.id4s-h.h-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.id4s-h.h-n  { top: -6px; left: 50%; margin-left: -5px; cursor: ns-resize; }
+.id4s-h.h-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.id4s-h.h-e  { top: 50%; right: -6px; margin-top: -5px; cursor: ew-resize; }
+.id4s-h.h-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.id4s-h.h-s  { bottom: -6px; left: 50%; margin-left: -5px; cursor: ns-resize; }
+.id4s-h.h-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.id4s-h.h-w  { top: 50%; left: -6px; margin-top: -5px; cursor: ew-resize; }
+
+.id4s-inline {
+    position: absolute; z-index: 12; box-sizing: border-box; resize: none;
+    background: rgba(18,20,24,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    color: #fff; border: 2px solid var(--color-accent, #3b82f6);
+    border-radius: 4px; padding: 6px; font-size: 13px; font-family: inherit;
+}
+
+.id4s-side { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+/* element list grows to fill the column height (matches the canvas height),
+   instead of a fixed 260px window */
+.id4s-elcard { flex: 1 1 auto; min-height: 220px; }
+.id4s-elcard .id4s-list { flex: 1 1 auto; max-height: none; }
+/* below ~700px (the Forge side column) everything stacks into ONE column at
+   the full available width: canvas first, then the panels - never squeezed */
+@container id4s (max-width: 700px) { .id4s-main { grid-template-columns: 1fr; } }
+.id4s { container-type: inline-size; container-name: id4s; }
+.id4s-card { background: var(--block-background-fill, #222); border: 1px solid var(--input-border-color, #444); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.id4s-cardhead { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; opacity: .85; flex-wrap: wrap; }
+.id4s-tiny {
+    display: inline-flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 26px; padding: 2px 12px;
+    background: var(--button-secondary-background-fill, #333); color: inherit;
+    border: 1px solid var(--input-border-color, #555); border-radius: 5px;
+    font-size: 12px; cursor: pointer; text-transform: none; line-height: 1.2;
+}
+.id4s-tiny:hover { border-color: var(--color-accent, #3b82f6); }
+.id4s-elcard select { background: none; border: none; color: inherit; font-size: 11px; text-transform: none; }
+.id4s-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
+.id4s-list li {
+    position: relative; display: flex; align-items: center; gap: 6px;
+    padding: 4px 6px; border-radius: 5px; border: 1px solid transparent;
+    background: var(--input-background-fill, #1c1c1c); cursor: pointer; font-size: 12px;
+}
+.id4s-list li:hover { border-color: var(--input-border-color, #555); }
+.id4s-list li.sel { border-color: var(--color-accent, #3b82f6); }
+.id4s-list li.primary { border-color: var(--color-accent, #3b82f6); background: color-mix(in srgb, var(--color-accent, #3b82f6) 18%, var(--input-background-fill, #1c1c1c)); }
+.id4s-list li.grouped::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 5px 0 0 5px; background: var(--gc, #3b82f6); }
+.id4s-list li.muted .id4s-snip { opacity: .45; text-decoration: line-through; }
+.id4s-list li.dragging { opacity: .35; }
+.id4s-list li.id4s-empty { opacity: .6; font-size: 11px; cursor: default; }
+.id4s-drag { cursor: grab; opacity: .3; margin: 0 -4px; font-style: normal; }
+.id4s-list li:hover .id4s-drag { opacity: .8; }
+.id4s-typebtn { background: none; border: none; cursor: pointer; color: inherit; opacity: .7; font-size: 13px; padding: 0 2px; }
+.id4s-typebtn:hover { color: var(--color-accent, #3b82f6); }
+.id4s-typebtn.off { opacity: .35; }
+.id4s-idx {
+    flex: none; min-width: 18px; height: 17px; padding: 0 4px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700;
+}
+.id4s-link { font-style: normal; opacity: .5; font-size: 12px; }
+.id4s-snip { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.id4s-chipcolor { position: relative; display: inline-flex; cursor: pointer; overflow: hidden; border-radius: 5px; }
+.id4s-chipcolor input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.id4s-seg { background: var(--button-secondary-background-fill, #333); border: 1px solid var(--input-border-color, #555); color: inherit; border-radius: 5px; min-width: 26px; height: 24px; font-size: 12px; cursor: pointer; }
+.id4s-seg:hover { border-color: var(--color-accent, #3b82f6); }
+.id4s-seg.on { background: var(--color-accent, #3b82f6); border-color: var(--color-accent, #3b82f6); color: #fff; }
+.id4s-seg.off { color: #f87171; }
+
+.id4s-field { display: flex; gap: 8px; align-items: flex-start; font-size: 11px; opacity: .95; }
+.id4s-field > span { width: 70px; flex: none; padding-top: 6px; text-align: right; opacity: .7; }
+.id4s-field input, .id4s-field textarea {
+    flex: 1; background: rgba(18,20,24,.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    color: var(--body-text-color, #ddd);
+    border: 1px solid var(--input-border-color, #555); border-radius: 5px; padding: 6px;
+    font-size: 12px; font-family: inherit; resize: vertical;
+}
+.id4s-field input:focus, .id4s-field textarea:focus { outline: none; border-color: var(--color-accent, #3b82f6); }
+.id4s-menu input[type=number] {
+    background: rgba(18,20,24,.45); color: var(--body-text-color, #ddd);
+    border: 1px solid var(--input-border-color, #555); border-radius: 4px; padding: 3px 6px; font-size: 12px;
+}
+.id4s-elcard select {
+    background: rgba(18,20,24,.45); border: 1px solid var(--input-border-color, #555);
+    color: inherit; font-size: 11px; text-transform: none; border-radius: 4px; padding: 2px 4px;
+}
+.id4s-style summary { cursor: pointer; font-size: 11px; opacity: .7; }
+.id4s-pal { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.id4s-pchip { display: inline-block; width: 16px; height: 16px; border-radius: 3px; cursor: pointer; border: 1px solid #0005; }
+.id4s-pal input[type=color] { width: 30px; height: 24px; padding: 0; border-radius: 4px; }

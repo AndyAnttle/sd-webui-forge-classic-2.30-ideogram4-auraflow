@@ -1008,7 +1008,7 @@
             // sanity
             if (e.bbox) e.bbox = e.bbox.map(clamp);
             e.enabled = e.enabled !== false;
-            e.color_palette = Array.isArray(e.color_palette) ? e.color_palette : [];
+            e.color_palette = (Array.isArray(e.color_palette) ? e.color_palette : []).slice(0, 5);
         }
         if (state.overlay && state.overlay.showLabels === false) { showLabels = false; q("#labels-btn", root).classList.remove("on"); }
         if (state.preset) {

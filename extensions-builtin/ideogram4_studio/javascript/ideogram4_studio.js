@@ -564,7 +564,7 @@
             if (el.type === "text")
                 html += `<div class="id4s-field"><span>text</span><input data-ed="text" value="${esc(el.text)}" placeholder="literal text the model should draw"></div>`;
             html += `<div class="id4s-field"><span>desc</span><textarea data-ed="desc" rows="3" placeholder="${el.type === "text" ? "how the text looks (font, colour, placement)" : "detailed description of this object"}">${esc(el.desc)}</textarea></div>`;
-            html += `<div class="id4s-field"><span>colours</span><span class="id4s-pal">${(el.color_palette || []).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<input type="color" data-ed="addpal" title="add color (max 5)"></span></div>`;
+            html += `<div class="id4s-field"><span>colours</span><span class="id4s-pal">${(el.color_palette || []).map((c, i) => `<span class="id4s-pchip" style="background:${esc(c)}" data-ed="rmpal" data-pi="${i}" title="click to remove"></span>`).join("")}<input type="color" data-ed="addpal" title="add color (max 5)"><button class="id4s-seg" data-ed="copybox" title="copy this element's canvas marker color into its palette (what the model receives)">⬐ canvas</button></span></div>`;
             body.innerHTML = html;
         }
         root.addEventListener("input", (ev) => {
@@ -592,6 +592,15 @@
                 push(); renderEditor(); renderBoxes(); return;
             }
             if (!ed || !el) return;
+            if (ed === "copybox") {
+                const c = (el.boxColor || (el.type === "text" ? TEXT_COLOR : OBJ_COLOR)).toLowerCase();
+                el.color_palette = el.color_palette || [];
+                if (el.color_palette.length < 5 && !el.color_palette.includes(c)) {
+                    el.color_palette.push(c);
+                    commit(); renderEditor(); renderBoxes();
+                }
+                return;
+            }
             if (ed === "type-obj") { setShared(el.id, "type", "obj"); renderEditor(); }
             else if (ed === "type-text") { setShared(el.id, "type", "text"); renderEditor(); }
             else if (ed === "togglebbox") {

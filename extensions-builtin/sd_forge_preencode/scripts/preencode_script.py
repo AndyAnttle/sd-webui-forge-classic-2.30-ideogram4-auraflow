@@ -28,7 +28,8 @@ from modules import scripts, shared
 
 
 class PromptGroupPreEncode(scripts.Script):
-    sorting_priority = 3  # near the end of process_batch order: inject after other scripts ran
+    sorting_priority = 3  # runs after prompt-processing scripts (priority 0-2); a script
+    # that still changes prompts later only produces a cache miss -> normal encoding path
 
     def title(self):
         return "Prompt Group Pre-Encode"
@@ -50,8 +51,12 @@ class PromptGroupPreEncode(scripts.Script):
             return
 
         if batch_number == 0:
-            if bool(enabled) and int(group_size) >= 2:
-                self._preencode(p, int(group_size))
+            try:
+                group = int(group_size or 0)
+            except (TypeError, ValueError):
+                group = 0
+            if bool(enabled) and group >= 2:
+                self._preencode(p, group)
             return
 
         store = getattr(p, "_forge_preencode", None)
@@ -66,10 +71,15 @@ class PromptGroupPreEncode(scripts.Script):
     def _preencode(self, p, size: int):
         if p.n_iter < 2 or p.is_hr_pass:
             return
+        if getattr(p, "subseed_strength", 0) > 0:
+            return  # per-batch re-noised init latent: reference conditioning differs per batch
         try:
             from backend.args import dynamic_args
-            if getattr(dynamic_args, "kontext", False):
-                return  # stateful reference latents; group encoding would change semantics
+            # engines whose TE call is stateful across batches must encode strictly
+            # batch-by-batch in the normal order
+            if any(getattr(dynamic_args, flag, False) for flag in
+                   ("kontext", "edit", "is_referencing", "pid", "wan")):
+                return
         except Exception:
             pass
         groups = min(size, p.n_iter)
@@ -104,8 +114,13 @@ class PromptGroupPreEncode(scripts.Script):
 
             try:
                 p.setup_conds()
-            except Exception:
-                # a failed pre-encode must never break the generation itself
+            except Exception as e:
+                # a failed pre-encode must never break the generation itself.
+                # OOM during the group sweep (heavy TE) -> keep whatever was
+                # already stored; remaining batches fall back to normal encoding.
+                from backend.memory_management import OOM_EXCEPTION
+                if OOM_EXCEPTION is not None and isinstance(e, OOM_EXCEPTION):
+                    break
                 store = {}
                 break
 

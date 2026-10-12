@@ -544,7 +544,10 @@ class LoadedModel:
             self._patcher_finalizer.detach()
 
     def is_dead(self):
-        return self.real_model() is not None and self.model is None
+        # real_model is None while the entry was never loaded (or after
+        # model_unload) — such an entry cannot hold a leak, and calling the
+        # None placeholder crashed every later generation (issue #1500).
+        return self.real_model is not None and self.real_model() is not None and self.model is None
 
 
 def use_more_memory(extra_memory, loaded_models, device):
@@ -773,7 +776,8 @@ def cleanup_models_gc(*, target: list["ModelPatcher"] = []):
 def cleanup_models():
     to_delete = []
     for i in range(len(current_loaded_models)):
-        if current_loaded_models[i].real_model() is None:
+        entry = current_loaded_models[i]
+        if entry.real_model is None or entry.real_model() is None:
             to_delete = [i] + to_delete
 
     for i in to_delete:

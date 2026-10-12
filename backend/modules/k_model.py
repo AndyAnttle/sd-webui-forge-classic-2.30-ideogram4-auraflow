@@ -62,5 +62,16 @@ class KModel(torch.nn.Module):
         input_shapes = [input_shape]
         area = sum(map(lambda input_shape: input_shape[0] * math.prod(input_shape[2:]), input_shapes))
 
-        _size = 8 if (attention.attention_function is attention.attention_basic) else memory_management.dtype_size(self.computation_dtype)
-        return (area * _size * 0.02 * self.config.memory_usage_factor) * (1024 * 1024)
+        if attention.attention_function is attention.attention_basic:
+            # Non-flash attention materializes full score matrices ; coefficient
+            # matches the reference implementation's non-flash branch (0.15)
+            return (area * 0.16 * self.config.memory_usage_factor) * (1024 * 1024)
+
+        # Flash-like attention (sage / flash / xformers / sdpa / comfy-kitchen int8) never
+        # materializes the score matrix. The reference implementation measures that at
+        # 0.01 * dtype_size (current ComfyUI model_base.memory_required) ; the 0.02 here
+        # was the legacy v0.3.64 value and overestimated activations 2x, which for
+        # quantized models (activations stay at compute dtype ; only weights are int8/int4)
+        # left no VRAM budget for weights to remain resident during Hires. (upstream #1537)
+        _size = memory_management.dtype_size(self.computation_dtype)
+        return (area * _size * 0.01 * self.config.memory_usage_factor) * (1024 * 1024)

@@ -217,6 +217,27 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
     - require syntax `<lora:name:[w1@t1, w2@t2, ...]>`
     - see [comment](https://github.com/Haoming02/sd-webui-forge-classic/issues/1439#issuecomment-5539099537) for example
 
+#### This Fork (Ideogram 4 / AuraFlow maintenance)
+
+> [!Note]
+> The items below are this fork's own additions on top of Neo; they are documented to keep the difference with upstream explicit.
+
+- [X] **Ideogram 4 Studio: colors and object management**
+    - `+` next to the object palette opens the system color picker; a color is added only when the picker is confirmed (**OK**), not while browsing it
+    - `✕` in the object editor deletes the selected object (previously only possible from the canvas)
+    - the palette is limited to **5 colors per object** (the model's limit) and duplicates are dropped on restore
+- [X] Restore **Stealth Infotext** (opt-in; upstream Neo removed it)
+    - **Settings → Infotext → "Stealth infotext mode"**: `Alpha` / `RGB` / `None` (default `None` = identical to upstream behavior)
+    - writes a gzip-compressed copy of the infotext into the least-significant bits of the image pixels; it survives re-encoding / copy-paste / re-upload that strip text metadata
+    - reading side (`PNG Info`, drag-and-drop, `Read generation parameters`) recovers infotext from the pixels automatically when the standard metadata is gone; images with real transparency keep their alpha values (each alpha changes by at most 1/255)
+- [X] **Prompt Group Pre-Encode** built-in script
+    - appears as an accordion under **Scripts** in txt2img / img2img / inpaint; **disabled by default**
+    - pre-encodes the prompts of the upcoming batches in one pass while the text encoder is loaded, so batch generation (large models like Ideogram 4, where TE load costs minutes) encodes each prompt once instead of re-loading the TE per batch
+    - group size 2–32; stateful passes (Refiner, Hires pass, kontext/edit/reference engines, subseed variation) are skipped automatically; a failed pre-encode falls back to the normal per-batch encoding
+- [X] Memory-management fixes
+    - a never-loaded / unloaded model entry no longer crashes `cleanup_models()` and poisons every later generation
+    - `memory_required` activation estimate aligned with the current reference for flash-attention paths, so `int8` / `convrot` quantized checkpoints stay resident under Hires.fix instead of being force-offloaded (upstream issue #1537 scenario)
+
 #### Removed Features
 
 - [X] SD2
@@ -230,7 +251,7 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 - [X] Some built-in Scripts
 - [X] Some Samplers & Schedulers
 - [X] Some Compatibility Settings
-- [X] Stealth Infotext
+- [X] Stealth Infotext *(removed upstream; restored in this fork — see [This Fork](#this-fork-ideogram-4--auraflow-maintenance))*
 - [X] `bitsandbytes` Support
 - [ ] `Nunchaku` Support
 

@@ -21,7 +21,7 @@ import pytz
 from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps, PngImagePlugin
 from pillow_heif import register_heif_opener
 
-from modules import errors, script_callbacks, sd_samplers, shared
+from modules import errors, script_callbacks, sd_samplers, shared, stealth_infotext
 from modules.paths_internal import roboto_ttf_file
 from modules.shared import opts
 
@@ -742,6 +742,8 @@ def save_image(image, path, basename, seed=None, prompt=None, extension="png", i
         pnginfo[pnginfo_section_name] = info
 
     params = script_callbacks.ImageSaveParams(image, p, fullfn, pnginfo)
+    if opts.enable_pnginfo:
+        stealth_infotext.add_stealth_pnginfo(params)
     script_callbacks.before_image_saved_callback(params)
 
     image = params.image
@@ -875,6 +877,10 @@ def read_info_from_image(image: Image.Image) -> tuple[str | None, dict]:
         return geninfo, items
 
     geninfo, items = read_standard()
+
+    # Fallback: steganographic infotext written by stealth_infotext (survives re-encoding that drops text chunks).
+    if geninfo is None:
+        geninfo = stealth_infotext.read_info_from_image_stealth(image)
 
     return geninfo, items
 

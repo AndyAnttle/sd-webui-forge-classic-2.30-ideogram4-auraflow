@@ -25,7 +25,10 @@ def prepare_data(params, mode='Alpha', compressed=True):
 def add_data(params, mode='Alpha', compressed=True):
     binary_data = prepare_data(params.pnginfo['parameters'], mode, compressed)
     if mode == 'Alpha':
-        params.image.putalpha(255)
+        # Only force an opaque alpha plane if the image lacks one; images with real transparency
+        # keep their alpha (only the LSB of each alpha value is used, a change of at most 1/255).
+        if params.image.mode != 'RGBA':
+            params.image.putalpha(255)
     width, height = params.image.size
     pixels = params.image.load()
     index = 0

@@ -834,7 +834,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                             override = None
                         break
 
-                if override is not None:
+                if override not in (None, "None"):
                     vae_sd = backend_utils.load_torch_file(override)
                     if sd_vae.vae_matches_model(shared.sd_model, vae_sd):
                         # same architecture and layout as the built VAE: fast in-place weight swap

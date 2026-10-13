@@ -18,6 +18,7 @@ model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(paths.models_path, model_dir))
 
 checkpoints_list: dict[str, "CheckpointInfo"] = {}
+_not_loadable_reported: set[str] = set()  # Attention lines for non-safetensors files: once per process
 checkpoint_aliases: dict[str, "CheckpointInfo"] = {}
 
 
@@ -66,6 +67,13 @@ class CheckpointInfo:
         if self.is_safetensors:
             try:
                 self.metadata = cache.cached_data_for_file("safetensors-metadata", "checkpoint/" + name, filename, read_metadata)
+            except AssertionError:
+                # file is not a real safetensors (HTML page from a failed download, HF cache
+                # leftovers like .no_exist/...): one short line per file per process instead of
+                # a traceback on every repeated model-list scan
+                if filename not in _not_loadable_reported:
+                    _not_loadable_reported.add(filename)
+                    errors.report(f"Attention: unsupported file skipped (not a loadable model): {filename}")
             except Exception as e:
                 errors.display(e, f"reading metadata for {filename}")
 

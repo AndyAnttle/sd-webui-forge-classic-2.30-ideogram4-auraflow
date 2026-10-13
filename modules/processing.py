@@ -24,6 +24,7 @@ import modules.sd_models as sd_models
 import modules.sd_vae as sd_vae
 import modules.shared as shared
 from backend import args, memory_management
+from backend import utils as backend_utils
 from backend.logging import setup_logger
 from backend.modules.k_prediction import rescale_zero_terminal_snr_sigmas
 from backend.utils import hash_tensor
@@ -801,6 +802,8 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
     stored_opts = {k: opts.data[k] if k in opts.data else opts.get_default(k) for k in p.override_settings.keys() if k in opts.data}
 
+    restore_loading_params = None
+
     try:
         # if no checkpoint override or the override checkpoint can't be found, remove override entry and load opts checkpoint
         # and if after running refiner, the refiner model is not unloaded - webui swaps back to main model here, if model over is present it will be reloaded afterwards
@@ -831,8 +834,22 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                             override = None
                         break
 
-                if sd_vae.reload_vae_weights(override):
-                    _overridden_modules.append(override)
+                if override is not None:
+                    vae_sd = backend_utils.load_torch_file(override)
+                    if sd_vae.vae_matches_model(shared.sd_model, vae_sd):
+                        # same architecture and layout as the built VAE: fast in-place weight swap
+                        if sd_vae.reload_vae_weights(override):
+                            _overridden_modules.append(override)
+                    else:
+                        # different VAE class/layout (2D vs 3D, diffusers format, ...): the strict
+                        # in-place load would raise; rebuild the model with this VAE as its module,
+                        # exactly what the VAE/TE dropdown does (upstream #1547). Loading params
+                        # are restored in the finally block below; user settings are not touched.
+                        restore_loading_params = dict(sd_models.model_data.forge_loading_parameters)
+                        _overridden_modules.append(override)
+                        sd_models.model_data.forge_loading_parameters = {**restore_loading_params, "additional_modules": list(_overridden_modules)}
+                        sd_models.forge_model_reload()
+                        p.sd_model = shared.sd_model
 
         # backwards compatibility, fix sampler and scheduler if invalid
         sd_samplers.fix_p_invalid_sampler_and_scheduler(p)
@@ -845,6 +862,11 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
         if p.override_settings_restore_afterwards:
             set_config(stored_opts, save_config=False)
         if _vae_override is not None:
+            if restore_loading_params is not None:
+                # the model was rebuilt with the override VAE as its module; put the original
+                # loading parameters back so the next generation uses the user's selection again
+                sd_models.model_data.forge_loading_parameters = restore_loading_params
+                sd_models.forge_model_reload()
             sd_vae.restore_vae_weights()
             _overridden_modules = None
 

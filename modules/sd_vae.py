@@ -22,6 +22,17 @@ def _load_vae_dict(model, vae_sd: dict):
     model.first_stage_model.load_state_dict(sd)
 
 
+def vae_matches_model(model, vae_sd: dict) -> bool:
+    """True only when vae_sd can be loaded into the already-built VAE in-place:
+    exact same tensor names and shapes as its state_dict (dtypes are cast by
+    load_state_dict itself). Anything else (2D vs 3D layouts, formats that
+    replace_state_dict converts at build time) needs a model rebuild instead
+    (upstream #1547: strict in-place load raised and X/Y/Z 'VAE' cells rendered black)."""
+    file_sig = {k: tuple(v.shape) for k, v in vae_sd.items() if k[0:4] != "loss" and k not in vae_ignore_keys}
+    model_sig = {k: tuple(v.shape) for k, v in model.first_stage_model.state_dict().items()}
+    return file_sig == model_sig
+
+
 def get_loaded_vae_name() -> str:
     if loaded_vae_file is None:
         return None

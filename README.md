@@ -221,6 +221,7 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 
 > [!Note]
 > The items below are this fork's own additions on top of Neo; they are documented to keep the difference with upstream explicit.
+> Bug-fix history is kept in [Releases](../../releases) (each entry lists the upstream issue number it addresses).
 
 - [X] **Ideogram 4 Studio: colors and object management**
     - `+` next to the object palette opens the system color picker; a color is added only when the picker is confirmed (**OK**), not while browsing it

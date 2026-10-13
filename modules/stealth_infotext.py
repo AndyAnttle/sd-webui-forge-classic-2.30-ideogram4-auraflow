@@ -112,6 +112,10 @@ def read_info_from_image_stealth(image):
                             compressed = True
                         buffer_rgb = ''
                         index_rgb = 0
+                    else:
+                        if not has_alpha:
+                            read_end = True
+                            break
             elif reading_param_len:
                 if mode == 'alpha':
                     if index_a == 32:

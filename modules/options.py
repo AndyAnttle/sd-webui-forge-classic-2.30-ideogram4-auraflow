@@ -137,7 +137,7 @@ class Options:
                 if cmd_opts.hide_ui_dir_config and key in self.restricted_opts:
                     raise RuntimeError(f"not possible to set '{key}' because it is restricted with --hide_ui_dir_config")
 
-                self.data[key] = value
+                self.data[key] = self.coerce_number(key, value, info)
                 return
 
         return super(Options, self).__setattr__(key, value)
@@ -199,6 +199,21 @@ class Options:
         with open(filename, "w", encoding="utf8") as file:
             json.dump(self.data, file, indent=4, ensure_ascii=False)
 
+    def coerce_number(self, key, value, info=None):
+        """int-typed settings must stay int: integer-valued floats left in config.json by old
+        versions or API edits otherwise crash consumers like tile arithmetic
+        (upstream #1471: TypeError: 'float' object cannot be interpreted as an integer,
+        ValueError: Invalid quality setting)"""
+        info = info if info is not None else self.data_labels.get(key, None)
+        if info is None:
+            return value
+        default = info.default
+        if isinstance(default, bool) or isinstance(value, bool):
+            return value
+        if isinstance(default, int) and isinstance(value, float) and value.is_integer():
+            return int(value)
+        return value
+
     def same_type(self, x, y):
         if x is None or y is None:
             return True
@@ -218,6 +233,9 @@ class Options:
         bad_settings = 0
         for k, v in self.data.items():
             info = self.data_labels.get(k, None)
+            if info is not None:
+                v = self.coerce_number(k, v, info)
+                self.data[k] = v
             if info is not None and not self.same_type(info.default, v):
                 print(f"Warning: bad setting value: {k}: {v} ({type(v).__name__}; expected {type(info.default).__name__})", file=sys.stderr)
                 bad_settings += 1

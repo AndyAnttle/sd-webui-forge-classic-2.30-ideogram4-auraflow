@@ -1248,6 +1248,15 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
     def __post_init__(self):
         super().__post_init__()
 
+        if self.enable_hr:
+            # API/script callers may omit the hires sub-fields that the Web UI always sends;
+            # as None they crash downstream (modules_change(None) TypeError; denoising strength
+            # comparison in sd_samplers_common.setup_img2img_steps). Restore the UI defaults.
+            if self.hr_additional_modules is None:
+                self.hr_additional_modules = ["Use same choices"]
+            if self.denoising_strength is None:
+                self.denoising_strength = 0.75
+
         if self.firstphase_width != 0 or self.firstphase_height != 0:
             self.hr_upscale_to_x = self.width
             self.hr_upscale_to_y = self.height

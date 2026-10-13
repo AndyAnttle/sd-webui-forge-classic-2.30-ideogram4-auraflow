@@ -141,6 +141,13 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have VAE state dict!"
             from backend.nn.qwen21_vae import Wan22VAE
 
+            if "encoder.conv1.weight" not in state_dict:
+                # Qwen-Image 2.1 can only use its native 3D Wan2.2-style VAE (64-channel latents).
+                # 2D files (16-channel latents, e.g. Qwen2D VAE for Qwen-Image 1.x/Wan) cannot match this model.
+                msg = "Model Qwen-Image 2.1 supports only its native 3D VAE (Wan2.2-style, 64 latent channels). The given VAE file has a different format (no 3D VAE keys, e.g. encoder.conv1.weight) and cannot be used with this model."
+                logger.error(msg)
+                raise RuntimeError(msg)
+
             config = Wan22VAE.load_config(config_path)
 
             config.update({"dim": int(state_dict["encoder.conv1.weight"].shape[0]), "dec_dim": int(state_dict["decoder.head.0.gamma"].shape[0]), "z_dim": 64, "dim_mult": [1, 2, 4, 8, 8], "num_res_blocks": 2, "attn_scales": [], "temporal_downsample": [False, True, True, True], "dropout": 0.0, "image_channels": int(state_dict["decoder.head.2.weight"].shape[0]), "patch_size": 1, "temporal_kernel": 1})

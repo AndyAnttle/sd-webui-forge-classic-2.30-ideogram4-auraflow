@@ -10,7 +10,6 @@ from secrets import compare_digest
 from threading import Lock
 from typing import Any, Union, get_args, get_origin
 
-import gradio as gr
 import piexif
 import piexif.helper
 import requests
@@ -318,28 +317,8 @@ class Api:
 
         # get default values recorded when the UI was built, instead of calling ui() again
         for script in script_runner.scripts:
-            if script.api_info is not None and len(script.api_info.args) == script.args_to - script.args_from:
+            if script.api_info is not None:
                 script_args[script.args_from : script.args_to] = [arg.value for arg in script.api_info.args]
-
-        # scripts whose api defaults did not resolve completely (ui() components built as generators
-        # inside an Accordion never record .value ; api_info absent entirely in --nowebui mode) —
-        # re-run ui() for just those, with the refresh-callback gate reset (our fork)
-        fallback_scripts = [
-            s for s in script_runner.scripts
-            if any(script_args[i] is None for i in range(s.args_from, s.args_to))
-        ]
-
-        if fallback_scripts:
-            from modules_forge import main_entry
-
-            with gr.Blocks():  # will throw errors calling ui function without this
-                main_entry.capture_callbacks()  # reset the one-shot refresh-callback gate before re-running ui()
-                for script in fallback_scripts:
-                    if script.ui(script.is_img2img):
-                        ui_default_values = []
-                        for elem in script.ui(script.is_img2img):
-                            ui_default_values.append(elem.value)
-                        script_args[script.args_from : script.args_to] = ui_default_values
         return script_args
 
     def init_script_args(self, request, default_script_args, selectable_scripts, selectable_idx, script_runner, *, input_script_args=None):

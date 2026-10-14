@@ -10,6 +10,7 @@ from secrets import compare_digest
 from threading import Lock
 from typing import Any, Union, get_args, get_origin
 
+import gradio as gr
 import piexif
 import piexif.helper
 import requests
@@ -316,12 +317,17 @@ class Api:
         script_args[0] = 0
 
         # get default values recorded when the UI was built, instead of calling ui() again
-        fallback_scripts: list[scripts.Script] = []
         for script in script_runner.scripts:
-            if script.api_info is not None:
+            if script.api_info is not None and len(script.api_info.args) == script.args_to - script.args_from:
                 script_args[script.args_from : script.args_to] = [arg.value for arg in script.api_info.args]
-            else:
-                fallback_scripts.append(script)  # e.g. --nowebui : the UI was never built, api_info is empty (our fork: re-run ui() safely for these)
+
+        # scripts whose api defaults did not resolve completely (ui() components built as generators
+        # inside an Accordion never record .value ; api_info absent entirely in --nowebui mode) —
+        # re-run ui() for just those, with the refresh-callback gate reset (our fork)
+        fallback_scripts = [
+            s for s in script_runner.scripts
+            if any(script_args[i] is None for i in range(s.args_from, s.args_to))
+        ]
 
         if fallback_scripts:
             from modules_forge import main_entry

@@ -86,7 +86,13 @@ vram_group.add_argument("--lowvram", action="store_true", help="Split the diffus
 vram_group.add_argument("--novram", action="store_true", help="When even LOW_VRAM is still not enough")
 vram_group.add_argument("--cpu", action="store_true", help="Use the CPU for everything (slow)")
 
+class ActivationBudget(enum.Enum):
+    DTYPE = "dtype"  # reference estimate: activations at compute dtype (safe default)
+    ONE_BYTE = "1byte"  # assume int8-sized activations for fully-W8A8 models (small-VRAM heuristic)
+
+
 parser.add_argument("--reserve-vram", type=float, default=None, metavar="GB", help="Set the amount of VRAM you want to reserve for other software (by default some amount is reserved)")
+parser.add_argument("--int8-activation-budget", action=EnumAction, type=ActivationBudget, default=ActivationBudget.DTYPE, metavar="[dtype,1byte]", help="Activation budget used for fully-int8 (W8A8) models ; 'dtype' = the reference estimate (activations at compute dtype ; safe default) ; '1byte' = assume int8-sized activations (keeps more int8 weights resident ; may help on small-VRAM cards at hires sizes ; risks OOM at large resolutions)")
 parser.add_argument("--disable-smart-memory", action="store_true", help="Aggressively offload to RAM instead of keeping models in VRAM when possible")
 parser.add_argument("--force-non-blocking", action="store_true", help="Use non-blocking operations for all applicable tensors")
 

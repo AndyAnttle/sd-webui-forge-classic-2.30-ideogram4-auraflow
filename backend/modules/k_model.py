@@ -78,11 +78,10 @@ class KModel(torch.nn.Module):
         # EXPERIMENT (in-progress only): variant C from Speeskees (comment under our
         # commit 36bd7462 / upstream issue #1537): W8A8 models (all quantized linears are
         # int8_tensorwise QuantizedTensors) estimate activations at 1 byte instead of
-        # compute-dtype size. Toggle: FORGE_MEMGUARD_INT8 env var (default off = our B formula).
+        # compute-dtype size. Opt-in via --int8-activation-budget 1byte (default: dtype).
         _size = memory_management.dtype_size(self.computation_dtype)
         _coef = 0.01
-        import os as _os
-        if _os.environ.get("FORGE_MEMGUARD_INT8") == "1":
+        if args.args.int8_activation_budget is args.ActivationBudget.ONE_BYTE:
             from backend.quant_ops import QuantizedTensor
             quantized_linears = [m for m in self.diffusion_model.modules() if getattr(m, "quant_format", None) is not None and hasattr(m, "in_features") and hasattr(m, "out_features")]
             if quantized_linears and all(

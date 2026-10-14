@@ -10,7 +10,6 @@ from secrets import compare_digest
 from threading import Lock
 from typing import Any, Union, get_args, get_origin
 
-import gradio as gr
 import piexif
 import piexif.helper
 import requests
@@ -316,17 +315,25 @@ class Api:
         script_args = [None] * last_arg_index
         script_args[0] = 0
 
-        # get default values
-        from modules_forge import main_entry
+        # get default values recorded when the UI was built, instead of calling ui() again
+        fallback_scripts: list[scripts.Script] = []
+        for script in script_runner.scripts:
+            if script.api_info is not None:
+                script_args[script.args_from : script.args_to] = [arg.value for arg in script.api_info.args]
+            else:
+                fallback_scripts.append(script)  # e.g. --nowebui : the UI was never built, api_info is empty (our fork: re-run ui() safely for these)
 
-        with gr.Blocks():  # will throw errors calling ui function without this
-            main_entry.capture_callbacks()  # scripts may register refresh-callbacks in ui(); reset the one-shot gate before re-running ui() here
-            for script in script_runner.scripts:
-                if script.ui(script.is_img2img):
-                    ui_default_values = []
-                    for elem in script.ui(script.is_img2img):
-                        ui_default_values.append(elem.value)
-                    script_args[script.args_from : script.args_to] = ui_default_values
+        if fallback_scripts:
+            from modules_forge import main_entry
+
+            with gr.Blocks():  # will throw errors calling ui function without this
+                main_entry.capture_callbacks()  # reset the one-shot refresh-callback gate before re-running ui()
+                for script in fallback_scripts:
+                    if script.ui(script.is_img2img):
+                        ui_default_values = []
+                        for elem in script.ui(script.is_img2img):
+                            ui_default_values.append(elem.value)
+                        script_args[script.args_from : script.args_to] = ui_default_values
         return script_args
 
     def init_script_args(self, request, default_script_args, selectable_scripts, selectable_idx, script_runner, *, input_script_args=None):

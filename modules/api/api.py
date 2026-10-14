@@ -317,7 +317,10 @@ class Api:
         script_args[0] = 0
 
         # get default values
+        from modules_forge import main_entry
+
         with gr.Blocks():  # will throw errors calling ui function without this
+            main_entry.capture_callbacks()  # scripts may register refresh-callbacks in ui(); reset the one-shot gate before re-running ui() here
             for script in script_runner.scripts:
                 if script.ui(script.is_img2img):
                     ui_default_values = []

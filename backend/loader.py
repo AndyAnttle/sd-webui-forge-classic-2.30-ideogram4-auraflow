@@ -619,6 +619,16 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
     if getattr(guess, "huggingface_repo", "") == "Ideogram4" and "model.layers.0.post_attention_layernorm.weight" in asd and any(k.startswith("model.visual.") for k in asd):
         asd = {k: v for k, v in asd.items() if not (k.startswith("model.visual.") or k.startswith("lm_head."))}
 
+    #   Qwen3-VL text-encoder files exported WITHOUT the root `model.` prefix
+    #   (bare `language_model.*` + `visual.*` layout, e.g. Krea-2 default TE export):
+    #   restore the prefix so the standard Qwen3VL routing below can pick the file up.
+    if (
+        "language_model.layers.0.post_attention_layernorm.weight" in asd
+        and "visual.deepstack_merger_list.0.norm.weight" in asd
+        and "model.visual.deepstack_merger_list.0.norm.weight" not in asd
+    ):
+        asd = state_dict_prefix_replace(asd, {"language_model.": "model.language_model.", "visual.": "model.visual."})
+
     #   flux 2
     if "decoder.post_quant_conv.weight" in asd:
         asd = state_dict_prefix_replace(asd, {"decoder.post_quant_conv.": "post_quant_conv.", "encoder.quant_conv.": "quant_conv."})

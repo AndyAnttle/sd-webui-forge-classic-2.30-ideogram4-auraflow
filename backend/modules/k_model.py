@@ -69,9 +69,30 @@ class KModel(torch.nn.Module):
 
         # Flash-like attention (sage / flash / xformers / sdpa / comfy-kitchen int8) never
         # materializes the score matrix. The reference implementation measures that at
-        # 0.01 * dtype_size (current ComfyUI model_base.memory_required) ; the 0.02 here
-        # was the legacy v0.3.64 value and overestimated activations 2x, which for
-        # quantized models (activations stay at compute dtype ; only weights are int8/int4)
-        # left no VRAM budget for weights to remain resident during Hires. (upstream #1537)
+        # 0.01 * dtype_size (ComfyUI model_base.memory_required, unchanged since v0.0.5 ;
+        # Forge classic 2.29.2 used the same 0.01 here). Neo's initial commit unified the
+        # branches as _size * 0.02 : that preserved the non-flash intent (8 * 0.02 = 0.16)
+        # but doubled the flash branch as a side effect. For quantized models (activations
+        # stay at compute dtype ; only weights are int8/int4) the doubled estimate left no
+        # VRAM budget for weights to remain resident during Hires. (upstream #1537)
+        # EXPERIMENT (in-progress only): variant C from Speeskees (comment under our
+        # commit 36bd7462 / upstream issue #1537): W8A8 models (all quantized linears are
+        # int8_tensorwise QuantizedTensors) estimate activations at 1 byte instead of
+        # compute-dtype size. Toggle: FORGE_MEMGUARD_INT8 env var (default off = our B formula).
         _size = memory_management.dtype_size(self.computation_dtype)
-        return (area * _size * 0.01 * self.config.memory_usage_factor) * (1024 * 1024)
+        _coef = 0.01
+        import os as _os
+        if _os.environ.get("FORGE_MEMGUARD_INT8") == "1":
+            from backend.quant_ops import QuantizedTensor
+            quantized_linears = [m for m in self.diffusion_model.modules() if getattr(m, "quant_format", None) is not None and hasattr(m, "in_features") and hasattr(m, "out_features")]
+            if quantized_linears and all(
+                m.quant_format == "int8_tensorwise"
+                and isinstance(getattr(m, "weight", None), QuantizedTensor)
+                and not getattr(m, "weight_function", ())
+                for m in quantized_linears
+            ):
+                if not getattr(self, "_memguard_logged", False):  # one short line per model instance
+                    self._memguard_logged = True
+                    memory_management.logger.info(f"[memguard-exp] W8A8 model: {len(quantized_linears)} int8 linears; estimating activations at 1 byte instead of {_size}")
+                _size = 1
+        return (area * _size * _coef * self.config.memory_usage_factor) * (1024 * 1024)

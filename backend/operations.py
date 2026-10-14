@@ -451,6 +451,8 @@ class ForgeOperationsGGUF(ForgeOperations):
     class Linear(torch.nn.Module, ForgeWeights):
         def __init__(self, *args, **kwargs):
             super().__init__()
+            self.in_features = kwargs.get("in_features", args[0] if len(args) > 0 else None)
+            self.out_features = kwargs.get("out_features", args[1] if len(args) > 1 else None)
             self.dummy = {"device": current_device, "dtype": current_dtype}
             self.weight = None
             self.bias = None
@@ -461,7 +463,30 @@ class ForgeOperationsGGUF(ForgeOperations):
                     computation_dtype = torch.float16
 
                 if prefix + "weight" in state_dict:
-                    self.weight = state_dict[prefix + "weight"].to(device=self.dummy["device"])
+                    weight = state_dict[prefix + "weight"]
+                    if (
+                        hasattr(weight, "real_shape")
+                        and len(weight.shape) == 1
+                        and self.in_features is not None
+                        and self.out_features is not None
+                        and weight.shape[0] == self.in_features * self.out_features
+                    ):
+                        # rank-1 GGUF tensors (e.g. Krea2 txtfusion projector) arrive flattened ;
+                        # restore the logical Linear shape from the module dims (upstream PR #1545,
+                        # rejected upstream but required for any Krea2 GGUF checkpoint to load)
+                        logical_shape = (self.out_features, self.in_features)
+                        if weight.gguf_cls is None:
+                            storage_shape = logical_shape
+                        else:
+                            block_size = weight.gguf_cls.block_size
+                            type_size = weight.gguf_cls.type_size
+                            if self.in_features % block_size != 0:
+                                raise ValueError(f"Cannot restore GGUF shape for {prefix}weight")
+                            storage_shape = (self.out_features, self.in_features // block_size * type_size)
+                        weight.data = weight.data.reshape(storage_shape)
+                        weight.real_shape = torch.Size(logical_shape)
+                    weight = weight.to(device=self.dummy["device"])
+                    self.weight = weight
                     self.weight.computation_dtype = computation_dtype
                 if prefix + "bias" in state_dict:
                     self.bias = state_dict[prefix + "bias"].to(device=self.dummy["device"])

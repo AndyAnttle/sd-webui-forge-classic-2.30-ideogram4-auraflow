@@ -109,6 +109,30 @@ def incompatible_message(model, vae_file: str, f_ifc, m_ifc) -> str:
     )
 
 
+def _build_evidence(model, vae_sd: dict):
+    """Ask the model's OWN construction branch to build+load the file (CPU, throwaway).
+    Returns True (the branch accepts it - the interface table was wrong), a reason string
+    (the branch rejects it - the incompatibility is proven, not a table opinion),
+    or None (construction infra unavailable - e.g. unit tests with fake models)."""
+    guess = getattr(model, "model_config", None)
+    repo = getattr(guess, "huggingface_repo", None)
+    if guess is None or not repo:
+        return None
+    try:
+        from diffusers import DiffusionPipeline
+
+        from backend.loader import HF, load_huggingface_component
+
+        cfg = DiffusionPipeline.load_config(os.path.join(HF, repo))
+        entry = cfg.get("vae")
+        if not isinstance(entry, list) or len(entry) != 2:
+            return None
+        module = load_huggingface_component(guess, "vae", entry[0], entry[1], os.path.join(HF, repo), vae_sd)
+        return module is not None
+    except Exception as e:
+        return " ".join(str(e).split())[:300]
+
+
 def classify(model, vae_sd: dict, vae_file: str):
     """Decision for an override VAE file against the live model. Returns
     (kind, message_or_None). Never raises for unclassifiable inputs: those stay on
@@ -134,7 +158,15 @@ def classify(model, vae_sd: dict, vae_file: str):
         return REBUILD, None  # GGUF / unusual family / unusual model: previous path
 
     if f_ifc["z"] != m_ifc["z"] or f_ifc["ratio"] != m_ifc["ratio"] or f_ifc["family"] != m_ifc["family"]:
-        return INCOMPATIBLE, incompatible_message(model, vae_file, f_ifc, m_ifc)
+        # do not trust the table alone: the model's own construction branch has the final say.
+        evidence = _build_evidence(model, normalized)
+        if evidence is True:
+            return HOTSWAP, None  # branch accepts the file - hot-swap it and prove at runtime
+        reason = None if evidence is None else evidence  # None: fake model (tests) - table verdict only
+        msg = incompatible_message(model, vae_file, f_ifc, m_ifc)
+        if reason:
+            msg += f" (construction branch: {reason})"
+        return INCOMPATIBLE, msg
 
     return HOTSWAP, None
 

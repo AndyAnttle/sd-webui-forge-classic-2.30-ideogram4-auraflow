@@ -26,6 +26,7 @@ import modules.shared as shared
 from backend import args, memory_management
 from backend import utils as backend_utils
 from backend.logging import setup_logger
+from backend import vae_hotswap
 from backend.modules.k_prediction import rescale_zero_terminal_snr_sigmas
 from backend.utils import hash_tensor
 from modules import devices, errors, extra_networks, images, infotext_utils, masking, profiling, prompt_parser, rng, scripts, sd_samplers, sd_samplers_common, sd_unet, sd_vae_approx
@@ -836,12 +837,30 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
                 if override not in (None, "None"):
                     vae_sd = backend_utils.load_torch_file(override)
-                    if sd_vae.vae_matches_model(shared.sd_model, vae_sd):
+                    swap_kind, swap_message = vae_hotswap.classify(shared.sd_model, vae_sd, override)
+                    if swap_kind == vae_hotswap.INPLACE:
                         # same architecture and layout as the built VAE: fast in-place weight swap
                         if sd_vae.reload_vae_weights(override):
                             _overridden_modules.append(override)
+                    elif swap_kind == vae_hotswap.HOTSWAP:
+                        # matching latent interface, different VAE internals (2D vs 3D): rebuild only the
+                        # VAE module through the model's own loader branch; the UNet stays in place
+                        # (upstream #1547 alternative to model rebuild)
+                        try:
+                            if vae_hotswap.hotswap_vae(shared.sd_model, override, vae_sd):
+                                logger.info(f"X/Y/Z VAE axis: hot-swapped VAE module to {os.path.basename(override)} (model not reloaded)")
+                            _overridden_modules.append(override)
+                        except Exception as e:
+                            logger.error(f"X/Y/Z VAE axis: hot-swap failed for {os.path.basename(override)}: {e}; falling back to model rebuild")
+                            restore_loading_params = dict(sd_models.model_data.forge_loading_parameters)
+                            _overridden_modules.append(override)
+                            sd_models.model_data.forge_loading_parameters = {**restore_loading_params, "additional_modules": list(_overridden_modules)}
+                            sd_models.forge_model_reload()
+                            p.sd_model = shared.sd_model
+                    elif swap_kind == vae_hotswap.INCOMPATIBLE:
+                        raise RuntimeError(swap_message)  # clear per-cell error instead of a black cell
                     else:
-                        # different VAE class/layout (2D vs 3D, diffusers format, ...): the strict
+                        # different VAE class/layout (GGUF, unclassifiable): the strict
                         # in-place load would raise; rebuild the model with this VAE as its module,
                         # exactly what the VAE/TE dropdown does (upstream #1547). Loading params
                         # are restored in the finally block below; user settings are not touched.
@@ -867,6 +886,8 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                 # loading parameters back so the next generation uses the user's selection again
                 sd_models.model_data.forge_loading_parameters = restore_loading_params
                 sd_models.forge_model_reload()
+            if vae_hotswap.hotswap_active():
+                vae_hotswap.restore_hotswap(shared.sd_model)  # re-attach the retained original wrapper, no reload
             sd_vae.restore_vae_weights()
             _overridden_modules = None
 

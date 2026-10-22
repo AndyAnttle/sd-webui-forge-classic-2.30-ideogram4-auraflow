@@ -825,50 +825,31 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
             if _vae_override is not None:
                 global _overridden_modules
                 _overridden_modules = shared.opts.forge_additional_modules.copy()
-                override: str = _vae_override
-                all_vae: list[str] = sd_vae.vae_dict.keys()
-                for i in range(len(_overridden_modules)):
-                    if os.path.basename(_overridden_modules[i]) in all_vae:
-                        if _overridden_modules[i] != override:
-                            _overridden_modules.pop(i)
-                        else:
-                            override = None
+                for module in shared.opts.forge_additional_modules:
+                    if module in sd_vae.vae_dict.values():
+                        _overridden_modules.remove(module)
                         break
-
-                if override not in (None, "None"):
-                    vae_sd = backend_utils.load_torch_file(override)
-                    swap_kind, swap_message = vae_hotswap.classify(shared.sd_model, vae_sd, override)
-                    if swap_kind == vae_hotswap.INPLACE:
-                        # same architecture and layout as the built VAE: fast in-place weight swap
-                        if sd_vae.reload_vae_weights(override):
-                            _overridden_modules.append(override)
-                    elif swap_kind == vae_hotswap.HOTSWAP:
+                if _vae_override not in (None, "None"):
+                    vae_sd = backend_utils.load_torch_file(_vae_override)
+                    swap_kind, swap_message = vae_hotswap.classify(shared.sd_model, vae_sd, _vae_override)
+                    if swap_kind == vae_hotswap.HOTSWAP:
                         # matching latent interface, different VAE internals (2D vs 3D): rebuild only the
-                        # VAE module through the model's own loader branch; the UNet stays in place
-                        # (upstream #1547 alternative to model rebuild)
+                        # VAE module through the model's own loader branch; the UNet stays in place.
+                        # Upstream splits the old VAE axis into a rebuild axis ("VAE") and this in-place
+                        # axis ("state_dict only"); hot-swap extends the in-place axis to 2D/3D pairs and
+                        # keeps clear errors (upstream #1547).
                         try:
-                            if vae_hotswap.hotswap_vae(shared.sd_model, override, vae_sd):
-                                logger.info(f"X/Y/Z VAE axis: hot-swapped VAE module to {os.path.basename(override)} (model not reloaded)")
-                            _overridden_modules.append(override)
+                            if vae_hotswap.hotswap_vae(shared.sd_model, _vae_override, vae_sd):
+                                logger.info(f"X/Y/Z VAE axis: hot-swapped VAE module to {os.path.basename(_vae_override)} (model not reloaded)")
+                            _overridden_modules.append(_vae_override)
                         except Exception as e:
-                            logger.error(f"X/Y/Z VAE axis: hot-swap failed for {os.path.basename(override)}: {e}; falling back to model rebuild")
-                            restore_loading_params = dict(sd_models.model_data.forge_loading_parameters)
-                            _overridden_modules.append(override)
-                            sd_models.model_data.forge_loading_parameters = {**restore_loading_params, "additional_modules": list(_overridden_modules)}
-                            sd_models.forge_model_reload()
-                            p.sd_model = shared.sd_model
+                            raise RuntimeError(f"{os.path.basename(_vae_override)} could not be hot-swapped for this model: {e}. Use the 'VAE' axis (full reload) for this file.") from e
                     elif swap_kind == vae_hotswap.INCOMPATIBLE:
                         raise RuntimeError(swap_message)  # clear per-cell error instead of a black cell
                     else:
-                        # different VAE class/layout (GGUF, unclassifiable): the strict
-                        # in-place load would raise; rebuild the model with this VAE as its module,
-                        # exactly what the VAE/TE dropdown does (upstream #1547). Loading params
-                        # are restored in the finally block below; user settings are not touched.
-                        restore_loading_params = dict(sd_models.model_data.forge_loading_parameters)
-                        _overridden_modules.append(override)
-                        sd_models.model_data.forge_loading_parameters = {**restore_loading_params, "additional_modules": list(_overridden_modules)}
-                        sd_models.forge_model_reload()
-                        p.sd_model = shared.sd_model
+                        # INPLACE (same graph) or unclassifiable: the strict weight swap, upstream behavior
+                        if sd_vae.reload_vae_weights(_vae_override):
+                            _overridden_modules.append(_vae_override)
 
         # backwards compatibility, fix sampler and scheduler if invalid
         sd_samplers.fix_p_invalid_sampler_and_scheduler(p)
@@ -881,11 +862,6 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
         if p.override_settings_restore_afterwards:
             set_config(stored_opts, save_config=False)
         if _vae_override is not None:
-            if restore_loading_params is not None:
-                # the model was rebuilt with the override VAE as its module; put the original
-                # loading parameters back so the next generation uses the user's selection again
-                sd_models.model_data.forge_loading_parameters = restore_loading_params
-                sd_models.forge_model_reload()
             if vae_hotswap.hotswap_active():
                 vae_hotswap.restore_hotswap(shared.sd_model)  # re-attach the retained original wrapper, no reload
             sd_vae.restore_vae_weights()

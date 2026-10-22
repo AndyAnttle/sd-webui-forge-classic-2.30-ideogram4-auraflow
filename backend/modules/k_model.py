@@ -75,12 +75,18 @@ class KModel(torch.nn.Module):
         # but doubled the flash branch as a side effect. For quantized models (activations
         # stay at compute dtype ; only weights are int8/int4) the doubled estimate left no
         # VRAM budget for weights to remain resident during Hires. (upstream #1537)
+        # Upstream (10bb5ed9-era) instead keys the 1-byte activation estimate on its new
+        # Mixed-precision quantization layout ; kept integrated here for that path.
         # EXPERIMENT (in-progress only): variant C from Speeskees (comment under our
         # commit 36bd7462 / upstream issue #1537): W8A8 models (all quantized linears are
         # int8_tensorwise QuantizedTensors) estimate activations at 1 byte instead of
         # compute-dtype size. Opt-in via --int8-activation-budget 1byte (default: dtype).
         _size = memory_management.dtype_size(self.computation_dtype)
         _coef = 0.01
+        if args.dynamic_args.ops.startswith("Mixed"):
+            # upstream #1537 direction: mixed-precision layout keeps activations at 1 byte;
+            # reproduce upstream's exact arithmetic (1 * 0.02) for that path
+            _size, _coef = 1, 0.02
         if args.args.int8_activation_budget is args.ActivationBudget.ONE_BYTE:
             from backend.quant_ops import QuantizedTensor
             quantized_linears = [m for m in self.diffusion_model.modules() if getattr(m, "quant_format", None) is not None and hasattr(m, "in_features") and hasattr(m, "out_features")]

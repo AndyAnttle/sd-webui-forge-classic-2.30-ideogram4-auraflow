@@ -82,6 +82,7 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 > - Pony v7 image style follows the AuraFlow conventions (its fine-tune); use higher
 >   resolutions (1024+), which the Pony author also recommends.
 
+- [X] Support [Moss-Image](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT)
 - [X] Support [Qwen-Image-2.1](https://huggingface.co/Qwen/Qwen-Image-2.1)
 - [X] Support [Krea 2](https://huggingface.co/krea/Krea-2-Turbo)
 - [X] Support **Krea 2 Identity Edit**
@@ -255,11 +256,13 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 - [X] Stealth Infotext *(removed upstream; restored in this fork — see [This Fork](#this-fork-ideogram-4--auraflow-maintenance))*
 - [X] `bitsandbytes` Support
 - [ ] `Nunchaku` Support
+- [ ] `GGUF` Support
 
 #### Optimizations
 
 - [X] **[Comfy]** Rewrite the Backend *(`memory_management.py`, `ModelPatcher`, `attention.py`, etc.)*
 - [X] No longer `git` `clone` any repository on fresh install
+- [X] No longer create the UI twice when using `--api`
 - [X] No longer install `open-clip`
 - [X] Fix memory leak when switching checkpoints
 - [X] Restore the ability to drag-and-drop images onto `gr.Image` that already contains image
@@ -303,6 +306,8 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 - [X] Update the implementation for `MultiDiffusion`
 - [X] Update the implementation for `uni_pc` and `LCM` samplers
 - [X] Update the implementation of LoRAs
+- [X] Streamline Model Refresh
+    - clicking refresh in Quicksettings will now also update `Hires. fix`, `Refiner`, and `X/Y/Z Plot` dropdowns
 - [X] Revamp settings
     - improve formatting
     - update descriptions
@@ -331,13 +336,13 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
 - [X] Update `protobuf`
     - faster `insightface` loading
 - [X] Update to latest PyTorch
-    - `torch==2.13.0+cu130`
+    - `torch==2.14.0+cu130`
 
 > [!Note]
 > If your GPU does not support the latest PyTorch, manually [install](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations#older-pytorch) older version of PyTorch
 
 - [X] Update some packages to newer versions
-- [X] Update recommended Python to `3.13.12`
+- [X] Update recommended Python to `3.13.15`
 - [X] many more... :tm:
 
 <br>
@@ -401,11 +406,6 @@ The name "Forge" is inspired by "Minecraft Forge". This project aims to become t
     - will also attempt to install `triton` automatically
 - `--flash`: Install the `flash_attn` package to speed up generation
 - `--nunchaku`: Install the `nunchaku` package to inference SVDQ models
-
-> [!Warning]
-> Using `nunchaku` will fall back to older version of PyTorch
-
-- `--onnxruntime-gpu`: Install the `onnxruntime` with the latest GPU support
 
 <br>
 
